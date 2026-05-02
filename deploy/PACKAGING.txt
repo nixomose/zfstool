@@ -1,0 +1,35 @@
+zfstool packaging notes
+=======================
+
+Agent (systemd)
+---------------
+- Install binary to /usr/bin/zfstool.
+- Install deploy/zfstool-agent.service to /etc/systemd/system/zfstool-agent.service.
+- systemctl daemon-reload && systemctl enable --now zfstool-agent
+- Socket path defaults to /run/zfstool/agent.sock (RuntimeDirectory=zfstool).
+
+Web
+---
+- zfstool web -listen 0.0.0.0:8787 -agent-socket /run/zfstool/agent.sock
+- Loopback clients: no HTTP auth.
+- Remote clients: set ZFSTOOL_WEB_USER and ZFSTOOL_WEB_PASSWORD (or ZFSTOOL_WEB_BCRYPT_HASH), or build with PAM support when added.
+
+GUI
+---
+- Default build: zfstool gui embeds a small web UI and opens the system browser.
+- Native GTK3: go build -tags gtk3 (requires libgtk-3-dev, CGO_ENABLED=1).
+
+Remote desktop
+--------------
+- SSH local forward: ssh -L 8787:127.0.0.1:8787 user@zfs-host
+- Run agent with -http 127.0.0.1:8787 or use zfstool web on host.
+
+Dependencies (runtime)
+----------------------
+- zfs / zpool (OpenZFS userland matching kernel module)
+- optional: smartctl for disk JSON
+- optional: journalctl or dmesg for kernel log snippet
+
+Build
+-----
+- go build -o zfstool ./cmd/zfstool

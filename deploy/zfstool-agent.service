@@ -1,0 +1,17 @@
+[Unit]
+Description=zfstool ZFS read-only agent (HTTP API on Unix socket)
+After=network.target local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/zfstool agent -socket /run/zfstool/agent.sock
+RuntimeDirectory=zfstool
+RuntimeDirectoryMode=0750
+Restart=on-failure
+
+# Run as root for full zpool/zfs/smartctl visibility (see project docs).
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

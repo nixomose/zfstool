@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>zfstool</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1rem; background: #1a1b26; color: #c0caf5; }
+    a { color: #7aa2f7; }
+    pre { background: #24283b; padding: 1rem; overflow: auto; border-radius: 6px; }
+    h1 { color: #bb9af7; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .card { background: #24283b; padding: 1rem; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #414868; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>zfstool</h1>
+  <nav>
+    <a href="#host">Host</a>
+    <a href="#pools">Pools</a>
+    <a href="#datasets">Datasets</a>
+    <a href="#history">History</a>
+  </nav>
+
+  <section id="host" class="card">
+    <h2>Host</h2>
+    <pre id="host-out">Loading…</pre>
+  </section>
+
+  <section id="pools" class="card">
+    <h2>Pools</h2>
+    <div id="pools-out">Loading…</div>
+  </section>
+
+  <section id="datasets" class="card">
+    <h2>Datasets</h2>
+    <label>Pool filter <input id="pool-filter" placeholder="tank"/></label>
+    <button type="button" id="load-ds">Load</button>
+    <pre id="datasets-out">—</pre>
+  </section>
+
+  <section id="history" class="card">
+    <h2>Pool history</h2>
+    <label>Pool <input id="hist-pool" placeholder="tank"/></label>
+    <button type="button" id="load-hist">Load</button>
+    <pre id="history-out">—</pre>
+  </section>
+
+  <script>
+    async function j(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+    async function loadHost() {
+      const h = await j('/v1/host');
+      document.getElementById('host-out').textContent = JSON.stringify(h, null, 2);
+    }
+    async function loadPools() {
+      const p = await j('/v1/pools');
+      const el = document.getElementById('pools-out');
+      el.innerHTML = '<table><thead><tr><th>Name</th><th>Health</th><th>Size</th><th>Alloc</th><th>Free</th></tr></thead><tbody>' +
+        p.map(x => `<tr><td><a href="#datasets" data-pool="${x.name}">${x.name}</a></td><td>${x.health}</td><td>${x.size}</td><td>${x.allocated}</td><td>${x.free}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+    document.getElementById('load-ds').onclick = async () => {
+      const pool = document.getElementById('pool-filter').value.trim();
+      const q = pool ? ('?pool=' + encodeURIComponent(pool)) : '';
+      const d = await j('/v1/datasets' + q);
+      document.getElementById('datasets-out').textContent = JSON.stringify(d, null, 2);
+    };
+    document.getElementById('load-hist').onclick = async () => {
+      const pool = document.getElementById('hist-pool').value.trim();
+      if (!pool) return;
+      const d = await j('/v1/pools/' + encodeURIComponent(pool) + '/history?limit=100');
+      document.getElementById('history-out').textContent = JSON.stringify(d, null, 2);
+    };
+    loadHost().catch(e => document.getElementById('host-out').textContent = e);
+    loadPools().catch(e => document.getElementById('pools-out').textContent = e);
+  </script>
+</body>
+</html>
