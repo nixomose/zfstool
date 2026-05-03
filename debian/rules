@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/pkg-info.mk
+
+export DEB_BUILD_MAINT_OPTIONS := hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -trimpath -buildmode=pie \
+		-ldflags '-s -w -X zfstool/internal/version.Version=$(DEB_VERSION_UPSTREAM)' \
+		-o zfstool ./cmd/zfstool
+
+override_dh_auto_install:
+	install -D -m0755 zfstool debian/zfstool/usr/bin/zfstool
+	install -D -m0644 deploy/zfstool-agent.service \
+		debian/zfstool/usr/lib/systemd/system/zfstool-agent.service
+
+override_dh_auto_test:
+	@:
+
+override_dh_auto_clean:
+	rm -f zfstool

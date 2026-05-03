@@ -32,4 +32,18 @@ Dependencies (runtime)
 
 Build
 -----
-- go build -o zfstool ./cmd/zfstool
+- make build
+  (or: go build -o bin/zfstool ./cmd/zfstool with your own -ldflags)
+
+Debian (.deb)
+-------------
+- Build deps: debhelper-compat (= 13), golang-go (>= 1.22), dpkg-dev, zfsutils-linux (runtime dep of package).
+- From repo root: make deb   (or: ./scripts/build-deb.sh)
+- Installs .deb in parent directory (..).
+
+RPM
+---
+- Build deps: rpm-build, golang >= 1.22, systemd-rpm-macros; git for the source tarball.
+- From repo root: make rpm   (or: ./scripts/build-rpm.sh)
+- Binary RPM under build/rpm/RPMS/<arch>/; override version: make rpm RPMVER=0.2.0 RPMREL=1
+- Source RPM: make srpm
