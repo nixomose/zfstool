@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"zfstool/internal/agent"
 	"zfstool/internal/gui"
@@ -14,26 +15,51 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+		gui.Run(nil)
+		return
 	}
-	switch os.Args[1] {
+	first := os.Args[1]
+	if strings.HasPrefix(first, "-") {
+		switch first {
+		case "-h", "--help":
+			usage()
+			return
+		case "-v", "--version":
+			fmt.Println(version.Version)
+			return
+		default:
+			// e.g. zfstool -agent-socket=... or zfstool --no-browser
+			gui.Run(os.Args[1:])
+			return
+		}
+	}
+	switch first {
 	case "agent":
 		runAgent(os.Args[2:])
 	case "web":
 		web.Run(os.Args[2:])
 	case "gui":
 		gui.Run(os.Args[2:])
-	case "version", "-v", "--version":
+	case "version":
 		fmt.Println(version.Version)
+	case "help":
+		usage()
 	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", first)
 		usage()
 		os.Exit(2)
 	}
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: zfstool <agent|web|gui|version> [flags]\n")
+	fmt.Fprintf(os.Stderr, `usage:
+  zfstool [gui flags]     open the desktop UI (GTK when built with -tags gtk3, else browser)
+  zfstool gui [flags]   same as above, explicit
+  zfstool agent [flags] run the API agent (Unix socket)
+  zfstool web [flags]   run the HTTP server + web UI
+  zfstool version       print version
+  zfstool help          show this message
+`)
 }
 
 func runAgent(args []string) {

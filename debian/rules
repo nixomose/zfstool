@@ -3,12 +3,13 @@
 include /usr/share/dpkg/pkg-info.mk
 
 export DEB_BUILD_MAINT_OPTIONS := hardening=+all
+export CGO_ENABLED := 1
 
 %:
 	dh $@
 
 override_dh_auto_build:
-	go build -trimpath -buildmode=pie \
+	go build -trimpath -buildmode=pie -tags gtk3 \
 		-ldflags '-s -w -X zfstool/internal/version.Version=$(DEB_VERSION_UPSTREAM)' \
 		-o zfstool ./cmd/zfstool
 

@@ -11,14 +11,39 @@ RPMVER  ?= $(firstword $(subst -, ,$(VERSION)))
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
+# For deps targets: privilege wrapper (script clears it when already root).
+SUDO    ?= sudo
+# Default desktop UI: native GTK (needs CGO + libgtk-3). Override: make build-headless
+GTK_TAGS ?= gtk3
 
-.PHONY: all build install clean deb srpm rpm rpm-tree vendor help
+.PHONY: all build build-headless install clean deb srpm rpm rpm-tree vendor \
+	deps deps-headless deb-deps rpm-deps help
 
 all: build
 
+# OS packages for local builds (see scripts/install-deps.sh). SUDO= empty if root.
+deps:
+	SUDO='$(SUDO)' ./scripts/install-deps.sh build
+
+deps-headless:
+	SUDO='$(SUDO)' ./scripts/install-deps.sh headless
+
+deb-deps:
+	SUDO='$(SUDO)' ./scripts/install-deps.sh deb
+
+rpm-deps:
+	SUDO='$(SUDO)' ./scripts/install-deps.sh rpm
+
 build:
 	mkdir -p bin
-	go build -trimpath -buildmode=pie \
+	CGO_ENABLED=1 go build -trimpath -buildmode=pie -tags '$(GTK_TAGS)' \
+		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
+		-o bin/zfstool ./cmd/zfstool
+
+# Static binary, browser-based UI when you run zfstool with no subcommand (no GTK/CGO).
+build-headless:
+	mkdir -p bin
+	CGO_ENABLED=0 go build -trimpath -buildmode=pie \
 		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 
@@ -60,5 +85,7 @@ vendor:
 	go mod vendor
 
 help:
-	@echo 'Targets: build (default), install, clean, deb, rpm, srpm, vendor, help'
+	@echo 'Targets: deps, deps-headless, deb-deps, rpm-deps, build (default, GTK+CGO),'
+	@echo '         build-headless, install, clean, deb, rpm, srpm, vendor, help'
 	@echo 'Variables: VERSION=$(VERSION) PREFIX=$(PREFIX) RPMVER=$(RPMVER) RPMREL=$(RPMREL)'
+	@echo '           GTK_TAGS=$(GTK_TAGS) SUDO=$(SUDO)'

@@ -3,12 +3,12 @@ Section: admin
 Priority: optional
 Maintainer: Zfstool Maintainers <zfstool@packages.local>
 Rules-Requires-Root: no
-Build-Depends: debhelper-compat (= 13), golang-go (>= 1.22)
+Build-Depends: debhelper-compat (= 13), golang-go (>= 1.22), gcc, pkg-config, libgtk-3-dev
 Standards-Version: 4.6.2
 
 Package: zfstool
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}, zfsutils-linux
+Depends: ${misc:Depends}, ${shlibs:Depends}, libgtk-3-0, zfsutils-linux
 Recommends: smartmontools
 Description: read-only ZFS and host inspection tool (agent, web UI, GUI)
  zfstool runs a small agent that exposes pool and host data over a Unix

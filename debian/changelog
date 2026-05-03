@@ -1,3 +1,9 @@
+zfstool (0.1.0-2) unstable; urgency=medium
+
+  * Default zfstool command opens GTK UI; build with -tags gtk3 and GTK build-deps.
+
+ -- Zfstool Maintainers <zfstool@packages.local>  Sat, 02 May 2026 14:00:00 +0000
+
 zfstool (0.1.0-1) unstable; urgency=medium
 
   * Initial Debian packaging.

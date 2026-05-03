@@ -14,10 +14,14 @@ Web
 - Loopback clients: no HTTP auth.
 - Remote clients: set ZFSTOOL_WEB_USER and ZFSTOOL_WEB_PASSWORD (or ZFSTOOL_WEB_BCRYPT_HASH), or build with PAM support when added.
 
-GUI
----
-- Default build: zfstool gui embeds a small web UI and opens the system browser.
-- Native GTK3: go build -tags gtk3 (requires libgtk-3-dev, CGO_ENABLED=1).
+GUI / default command
+-----------------------
+- Running `zfstool` with no subcommand opens the desktop UI (GTK when built with
+  -tags gtk3 and CGO; otherwise the embedded web UI + browser).
+- `zfstool gui` is the same as the default.
+- `zfstool web` and `zfstool agent` are explicit server/daemon modes.
+- Makefile default `make build` uses CGO and `-tags gtk3` (needs libgtk-3-dev).
+- Headless / static binary: `make build-headless` (no GTK; default command uses browser UI).
 
 Remote desktop
 --------------
@@ -32,18 +36,24 @@ Dependencies (runtime)
 
 Build
 -----
-- make build
-  (or: go build -o bin/zfstool ./cmd/zfstool with your own -ldflags)
+- make deps           install OS packages for make build (apt/dnf/yum/zypper/pacman)
+- make deps-headless  install Go only, for make build-headless
+- make deb-deps       install packages for make deb (Debian/Ubuntu apt only)
+- make rpm-deps       install packages for make rpm / make srpm (dnf/yum; zypper for rpm on openSUSE)
+- make build          (GTK UI default; CGO_ENABLED=1, -tags gtk3)
+- make build-headless (CGO off; browser UI when you run zfstool with no args)
 
 Debian (.deb)
 -------------
-- Build deps: debhelper-compat (= 13), golang-go (>= 1.22), dpkg-dev, zfsutils-linux (runtime dep of package).
+- Build deps: debhelper-compat (= 13), golang-go (>= 1.22), gcc, pkg-config,
+  libgtk-3-dev, dpkg-dev; runtime: libgtk-3-0, zfsutils-linux.
 - From repo root: make deb   (or: ./scripts/build-deb.sh)
 - Installs .deb in parent directory (..).
 
 RPM
 ---
-- Build deps: rpm-build, golang >= 1.22, systemd-rpm-macros; git for the source tarball.
+- Build deps: rpm-build, golang >= 1.22, gcc, gtk3-devel (pkgconfig gtk+-3.0),
+  systemd-rpm-macros; git for the source tarball.
 - From repo root: make rpm   (or: ./scripts/build-rpm.sh)
 - Binary RPM under build/rpm/RPMS/<arch>/; override version: make rpm RPMVER=0.2.0 RPMREL=1
 - Source RPM: make srpm

@@ -13,6 +13,8 @@ URL:            https://example.com/
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires:  golang >= 1.22
+BuildRequires:  gcc
+BuildRequires:  pkgconfig(gtk+-3.0)
 BuildRequires:  systemd-rpm-macros
 
 # ZFS userland is required to use the agent meaningfully; package names vary by distro/repo.
@@ -20,7 +22,8 @@ Recommends:     zfs
 
 %description
 zfstool runs a small agent that exposes pool and host data over a Unix socket
-(HTTP). The web and gui commands provide a browser UI. A systemd unit is
+(HTTP). The default command opens a GTK UI when built with gtk3; use zfstool web
+for the browser server. A systemd unit is
 included for the agent (zfstool-agent.service).
 
 %prep
@@ -28,7 +31,8 @@ included for the agent (zfstool-agent.service).
 
 %build
 export GO111MODULE=on
-go build -trimpath -buildmode=pie \
+export CGO_ENABLED=1
+go build -trimpath -buildmode=pie -tags gtk3 \
     -ldflags "-s -w -X zfstool/internal/version.Version=%{version}" \
     -o zfstool ./cmd/zfstool
 
