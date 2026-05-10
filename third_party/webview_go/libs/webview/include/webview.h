@@ -1320,7 +1320,10 @@ public:
   void *browser_controller_impl() override { return (void *)m_webview; };
   void run_impl() override {
     if (m_owns_window && m_window && !gtk_widget_get_visible(m_window)) {
-      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_NONE);
+      // GTK_WIN_POS_NONE still maps to an awkward corner on some compositors;
+      // center explicitly so placement is predictable without fixed x/y coords.
+      gtk_window_set_gravity(GTK_WINDOW(m_window), GDK_GRAVITY_CENTER);
+      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_CENTER);
       gtk_widget_show_all(m_window);
       gtk_widget_grab_focus(GTK_WIDGET(m_webview));
     }

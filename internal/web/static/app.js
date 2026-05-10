@@ -817,8 +817,7 @@
     }
   }
 
-  function dispatch() {
-    const r = parseRoute();
+  function navigateRoute(r) {
     switch (r.kind) {
       case 'home':
         renderHome();
@@ -846,8 +845,50 @@
     }
   }
 
+  function dispatch() {
+    navigateRoute(parseRoute());
+  }
+
+  function refreshCurrentView() {
+    poolsCache = null;
+    navigateRoute(parseRoute());
+  }
+
+  function invokeNativeExit() {
+    if (typeof window.zfstoolExit !== 'function') return;
+    try {
+      var p = window.zfstoolExit();
+      if (p && typeof p.then === 'function') {
+        p.catch(function () {});
+      }
+    } catch (_) {}
+  }
+
   window.addEventListener('hashchange', dispatch);
   dispatch();
+
+  document.addEventListener(
+    'keydown',
+    function (e) {
+      if (e.key === 'F5') {
+        e.preventDefault();
+        refreshCurrentView();
+        return;
+      }
+      if (
+        e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey &&
+        (e.key === 'q' || e.key === 'Q' || e.key === 'w' || e.key === 'W')
+      ) {
+        if (typeof window.zfstoolExit === 'function') {
+          e.preventDefault();
+          invokeNativeExit();
+        }
+      }
+    },
+    true
+  );
 
   function wireNativeExit() {
     var btn = document.getElementById('btn-native-exit');
@@ -856,12 +897,7 @@
     btn.hidden = false;
     btn.dataset.wired = '1';
     btn.addEventListener('click', function () {
-      try {
-        var p = window.zfstoolExit();
-        if (p && typeof p.then === 'function') {
-          p.catch(function () {});
-        }
-      } catch (_) {}
+      invokeNativeExit();
     });
   }
   wireNativeExit();
