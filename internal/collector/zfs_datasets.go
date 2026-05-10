@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"zfstool/internal/api"
-	"zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/execzfs"
 )
 
 // ListDatasets lists all datasets with common columns.

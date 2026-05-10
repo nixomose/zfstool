@@ -9,7 +9,7 @@ Version:        %{ver}
 Release:        %{rel}%{?dist}
 Summary:        Read-only ZFS and host inspection tool (agent, web UI, GUI)
 License:        MIT
-URL:            https://example.com/
+URL:            https://github.com/nixomose/zfstool
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires:  golang >= 1.22
@@ -36,7 +36,7 @@ export GO111MODULE=on
 export CGO_ENABLED=1
 export GOFLAGS=
 go build -trimpath -buildmode=pie \
-    -ldflags "-s -w -X zfstool/internal/version.Version=%{version}" \
+    -ldflags "-s -w -X github.com/nixomose/zfstool/internal/version.Version=%{version}" \
     -o zfstool ./cmd/zfstool
 
 %install

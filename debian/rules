@@ -10,7 +10,7 @@ export CGO_ENABLED := 1
 
 override_dh_auto_build:
 	GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie \
-		-ldflags '-s -w -X zfstool/internal/version.Version=$(DEB_VERSION_UPSTREAM)' \
+		-ldflags '-s -w -X github.com/nixomose/zfstool/internal/version.Version=$(DEB_VERSION_UPSTREAM)' \
 		-o zfstool ./cmd/zfstool
 
 override_dh_auto_install:

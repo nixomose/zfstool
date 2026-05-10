@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"zfstool/internal/api"
-	"zfstool/internal/collector"
-	"zfstool/internal/version"
+	"github.com/nixomose/zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/collector"
+	"github.com/nixomose/zfstool/internal/version"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

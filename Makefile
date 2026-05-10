@@ -37,20 +37,20 @@ rpm-deps:
 
 build:
 	mkdir -p bin && GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie \
-		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
+		-ldflags '-s -w -X github.com/nixomose/zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 	@echo "bin/zfstool: native window (WebKit). If a browser opens, run: GOFLAGS= CGO_ENABLED=1 go build -o bin/zfstool ./cmd/zfstool"
 
 # Browser UI: no CGO / no WebKit link (opens a browser tab for the UI).
 build-headless:
 	mkdir -p bin && GOFLAGS= CGO_ENABLED=0 go build -trimpath -buildmode=pie \
-		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
+		-ldflags '-s -w -X github.com/nixomose/zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 
 # Browser UI while keeping CGO enabled (e.g. other packages need CGO).
 build-browser:
 	mkdir -p bin && GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie -tags browser_gui \
-		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
+		-ldflags '-s -w -X github.com/nixomose/zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 
 install: build

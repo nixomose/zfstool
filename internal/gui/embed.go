@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"zfstool/internal/agent"
+	"github.com/nixomose/zfstool/internal/agent"
 )
 
 // embeddedAgentSocketPath returns a per-process private socket path for an in-process agent.

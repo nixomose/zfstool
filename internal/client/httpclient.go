@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/api"
 )
 
 var _ api.Client = (*HTTPClient)(nil)

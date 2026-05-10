@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/execzfs"
 )
 
 // ZfsDiff runs zfs diff -H from to (snapshots or dataset versions).

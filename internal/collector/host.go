@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"zfstool/internal/execzfs"
-	"zfstool/internal/version"
+	"github.com/nixomose/zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/version"
 )
 
 // Host collects OS + ZFS version + ARC basics.

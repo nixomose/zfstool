@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"zfstool/internal/api"
-	"zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/execzfs"
 )
 
 // PoolStatusFull returns parsed status + raw text.

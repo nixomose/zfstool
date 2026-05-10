@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"zfstool/internal/web"
+	"github.com/nixomose/zfstool/internal/web"
 )
 
 // LocalSession is the loopback HTTP server (static UI + /v1 proxy) plus agent lifecycle.

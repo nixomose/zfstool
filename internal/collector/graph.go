@@ -3,7 +3,7 @@ package collector
 import (
 	"context"
 
-	"zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/api"
 )
 
 // BuildDatasetGraph builds parent/child edges from origin + name hierarchy.

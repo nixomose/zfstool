@@ -1,1 +1,18 @@
+# Build output
+/zfstool
 bin/zfstool
+*.exe
+*.test
+dist/
+
+# Local / secrets
+.env
+.env.*
+!.env.example
+
+# Tooling
+coverage.out
+*.prof
+.DS_Store
+*.swp
+*~

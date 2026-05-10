@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"zfstool/internal/agent"
-	"zfstool/internal/gui"
-	"zfstool/internal/version"
-	"zfstool/internal/web"
+	"github.com/nixomose/zfstool/internal/agent"
+	"github.com/nixomose/zfstool/internal/gui"
+	"github.com/nixomose/zfstool/internal/version"
+	"github.com/nixomose/zfstool/internal/web"
 )
 
 func main() {

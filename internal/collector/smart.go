@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"zfstool/internal/api"
+	"github.com/nixomose/zfstool/internal/api"
 )
 
 // SMARTJSON runs smartctl -a -j device (best effort).

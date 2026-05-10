@@ -1,4 +1,4 @@
-module zfstool
+module github.com/nixomose/zfstool
 
 go 1.22
 
