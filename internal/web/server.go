@@ -23,10 +23,11 @@ var static embed.FS
 
 // Server is the zfstool web front-end (proxies /v1 to agent + static UI).
 type Server struct {
-	ListenAddr  string
-	AgentSocket string
-	PAMService  string
-	proxy       *httputil.ReverseProxy
+	ListenAddr     string
+	AgentSocket    string // unix path when AgentHTTPURL is empty
+	AgentHTTPURL   string // optional e.g. http://127.0.0.1:8787 (TCP agent)
+	PAMService     string
+	proxy          *httputil.ReverseProxy
 }
 
 // Run parses flags and blocks serving.
@@ -37,7 +38,7 @@ func Run(args []string) {
 	pamSvc := flg.String("pam-service", "login", "PAM service (unused unless built with pam)")
 	_ = flg.Parse(args)
 
-	s, err := NewServer(*listen, *socket, *pamSvc)
+	s, err := newServerBackend(*listen, *socket, "", *pamSvc)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,7 +50,11 @@ func Run(args []string) {
 	mux.Handle("/v1/", s.authMiddleware(http.HandlerFunc(s.proxyAgent)))
 	mux.Handle("/", s.authMiddleware(http.FileServer(http.FS(sub))))
 
-	log.Printf("zfstool web listening %s (proxy /v1 -> unix:%s)", s.ListenAddr, s.AgentSocket)
+	if s.AgentHTTPURL != "" {
+		log.Printf("zfstool web listening %s (proxy /v1 -> %s)", s.ListenAddr, s.AgentHTTPURL)
+	} else {
+		log.Printf("zfstool web listening %s (proxy /v1 -> unix:%s)", s.ListenAddr, s.AgentSocket)
+	}
 	_ = pamSvc
 	log.Fatal(http.ListenAndServe(s.ListenAddr, mux))
 }
@@ -64,22 +69,53 @@ func defaultAgentSocket() string {
 	return "/run/zfstool/agent.sock"
 }
 
-// NewServer builds reverse proxy to agent unix socket.
+// NewServer builds reverse proxy to the agent on a Unix domain socket.
 func NewServer(listen, agentSocket, pamService string) (*Server, error) {
-	s := &Server{ListenAddr: listen, AgentSocket: agentSocket, PAMService: pamService}
-	u, _ := url.Parse("http://localhost")
-	_ = u
-	s.proxy = &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = "http"
-			req.URL.Host = "localhost"
-		},
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, "unix", s.AgentSocket)
+	return newServerBackend(listen, agentSocket, "", pamService)
+}
+
+// NewServerWithHTTPAgent proxies /v1 to an agent listening on agentHTTPURL (e.g. http://host:8787).
+func NewServerWithHTTPAgent(listen, agentHTTPURL, pamService string) (*Server, error) {
+	return newServerBackend(listen, "", agentHTTPURL, pamService)
+}
+
+func newServerBackend(listen, agentUnix, agentHTTP, pamService string) (*Server, error) {
+	s := &Server{
+		ListenAddr:   listen,
+		AgentSocket:  agentUnix,
+		AgentHTTPURL: agentHTTP,
+		PAMService:   pamService,
+	}
+	switch {
+	case agentHTTP != "":
+		u, err := url.Parse(agentHTTP)
+		if err != nil {
+			return nil, err
+		}
+		if u.Scheme == "" || u.Host == "" {
+			return nil, os.ErrInvalid
+		}
+		s.proxy = &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.URL.Scheme = u.Scheme
+				req.URL.Host = u.Host
 			},
-		},
+		}
+	case agentUnix != "":
+		s.proxy = &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.URL.Scheme = "http"
+				req.URL.Host = "localhost"
+			},
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					var d net.Dialer
+					return d.DialContext(ctx, "unix", s.AgentSocket)
+				},
+			},
+		}
+	default:
+		return nil, os.ErrInvalid
 	}
 	return s, nil
 }

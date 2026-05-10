@@ -53,12 +53,15 @@ func main() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `usage:
-  zfstool [gui flags]     open the desktop UI (GTK when built with -tags gtk3, else browser)
+  zfstool [gui flags]     open the desktop app (WebKit window + in-process agent; else browser)
   zfstool gui [flags]   same as above, explicit
   zfstool agent [flags] run the API agent (Unix socket)
   zfstool web [flags]   run the HTTP server + web UI
   zfstool version       print version
   zfstool help          show this message
+
+gui flags: -agent-url for a remote HTTP agent; -agent-socket for an external Unix agent.
+If neither is set, an embedded agent runs in-process. ZFSTOOL_SOCKET is not used for the GUI.
 `)
 }
 

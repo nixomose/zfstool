@@ -45,23 +45,39 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /v1/zfs-diff", s.handleZfsDiff)
 }
 
-// ListenAndServeUnix creates parent dir, listens on SocketPath, serves until error.
-func (s *Server) ListenAndServeUnix() error {
+// ListenUnix creates parent dirs, binds a Unix socket at SocketPath, and returns the listener.
+func (s *Server) ListenUnix() (net.Listener, error) {
 	if s.SocketPath == "" {
-		return os.ErrInvalid
+		return nil, os.ErrInvalid
 	}
 	dir := filepath.Dir(s.SocketPath)
-	_ = os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
 	_ = os.Remove(s.SocketPath)
 	ln, err := net.Listen("unix", s.SocketPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := os.Chmod(s.SocketPath, 0o600); err != nil {
 		log.Printf("chmod socket: %v", err)
 	}
-	log.Printf("zfstool agent listening unix:%s", s.SocketPath)
+	return ln, nil
+}
+
+// Serve handles HTTP on ln until the listener is closed.
+func (s *Server) Serve(ln net.Listener) error {
 	return http.Serve(ln, s.mux)
+}
+
+// ListenAndServeUnix creates parent dir, listens on SocketPath, serves until error.
+func (s *Server) ListenAndServeUnix() error {
+	ln, err := s.ListenUnix()
+	if err != nil {
+		return err
+	}
+	log.Printf("zfstool agent listening unix:%s", s.SocketPath)
+	return s.Serve(ln)
 }
 
 // ListenAndServeTCP listens on HTTPAddr (e.g. 127.0.0.1:8787).

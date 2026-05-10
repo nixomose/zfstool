@@ -4,82 +4,308 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>zfstool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet"/>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 1rem; background: #1a1b26; color: #c0caf5; }
-    a { color: #7aa2f7; }
-    pre { background: #24283b; padding: 1rem; overflow: auto; border-radius: 6px; }
-    h1 { color: #bb9af7; }
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-    .card { background: #24283b; padding: 1rem; border-radius: 8px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #414868; }
-    nav a { margin-right: 1rem; }
+    :root {
+      --bg: #0e0f12;
+      --bg-elevated: #14161c;
+      --surface: #1a1d26;
+      --surface-hover: #22262f;
+      --border: #2e3440;
+      --border-accent: #3d4a5c;
+      --text: #e6e4df;
+      --text-secondary: #9c9890;
+      --accent: #b8956c;
+      --accent-dim: #8f7354;
+      --link: #a8bfd9;
+      --link-hover: #c8d9eb;
+      --heading: #f2efe8;
+      --err: #c97a7a;
+      --health-ok: #8faa8a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse 120% 80% at 50% -40%, rgba(60, 70, 90, 0.22), transparent 55%);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { color: var(--link-hover); text-decoration: underline; }
+    .site-header {
+      padding: 1.25rem 1.5rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+      box-shadow: inset 0 -1px 0 rgba(184, 149, 108, 0.12);
+    }
+    .site-header-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    .site-header h1 {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.65rem;
+      letter-spacing: 0.02em;
+      margin: 0 0 0.2rem 0;
+      color: var(--heading);
+    }
+    .site-header h1 a { color: inherit; text-decoration: none; }
+    .site-header h1 a:hover { opacity: 0.88; text-decoration: none; }
+    .site-tagline {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    #crumb {
+      padding: 0.55rem 1.5rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+      letter-spacing: 0.02em;
+    }
+    #crumb.crumb--hidden {
+      display: none;
+    }
+    .crumb-link { color: var(--link); }
+    .crumb-here { color: var(--text); font-weight: 500; }
+    .crumb-sep { color: var(--border-accent); margin: 0 0.15em; }
+    #app {
+      padding: 1.5rem 1.5rem 3rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    .home-lede {
+      font-size: 1.02rem;
+      color: var(--text-secondary);
+      max-width: 42rem;
+      margin: 0 0 2rem 0;
+      line-height: 1.65;
+    }
+    .page-section {
+      margin-bottom: 2.5rem;
+    }
+    .page-section:last-child { margin-bottom: 0; }
+    .section-heading {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.15rem;
+      color: var(--heading);
+      margin: 0 0 0.35rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: 0.03em;
+    }
+    .section-sub {
+      margin: 0.5rem 0 1rem 0;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .ref-grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    .ref-tile {
+      display: block;
+      padding: 1rem 1.1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 2px;
+      color: inherit;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    a.ref-tile:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-accent);
+      text-decoration: none;
+      color: inherit;
+    }
+    .ref-tile--static,
+    .ref-tile--muted {
+      border-left-color: var(--border-accent);
+      cursor: default;
+    }
+    .ref-tile-kicker {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+    }
+    .ref-tile-title {
+      display: block;
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: var(--heading);
+      margin-bottom: 0.35rem;
+    }
+    .ref-tile-desc {
+      display: block;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    h3.sub {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: 0.98rem;
+      color: var(--heading);
+      margin: 1.35rem 0 0.5rem 0;
+    }
+    .card.inner {
+      background: var(--surface);
+      padding: 1.1rem 1.2rem;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+    }
+    .pool-summary { margin-bottom: 0.5rem; }
+    .btn {
+      display: inline-block;
+      padding: 0.4rem 0.85rem;
+      border-radius: 2px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn.primary {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--bg);
+    }
+    .btn.primary:hover {
+      opacity: 0.92;
+      color: var(--bg);
+      text-decoration: none;
+    }
+    .pool-grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+    }
+    .pool-card {
+      display: block;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 2px;
+      padding: 1rem 1.1rem;
+      color: inherit;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pool-card:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-accent);
+      text-decoration: none;
+      color: inherit;
+    }
+    .pool-card-title {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.08rem;
+      color: var(--heading);
+    }
+    .pool-card-meta { margin-top: 0.45rem; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+    .pool-card-stats { margin-top: 0.55rem; font-size: 0.84rem; color: var(--text-secondary); }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.15rem 0.45rem;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+    .tag-health { color: var(--health-ok); border-color: rgba(143, 170, 138, 0.35); }
+    .tag-role {
+      color: var(--link);
+      border-color: rgba(168, 191, 217, 0.28);
+      background: rgba(168, 191, 217, 0.06);
+    }
+    .table-wrap { overflow-x: auto; border-radius: 2px; border: 1px solid var(--border); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td { text-align: left; padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--border); }
+    th {
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--bg-elevated);
+    }
+    tr:last-child td { border-bottom: none; }
+    .tree-table td.mono { font-family: "IBM Plex Sans", ui-monospace, monospace; font-size: 0.82rem; }
+    .tree-row:hover { background: rgba(168, 191, 217, 0.04); }
+    dl.kv {
+      display: grid;
+      grid-template-columns: 9.5rem 1fr;
+      gap: 0.4rem 1.1rem;
+      margin: 0;
+      align-items: baseline;
+    }
+    dl.kv dt {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin: 0;
+    }
+    dl.kv dd { margin: 0; word-break: break-word; }
+    table.arc { font-size: 0.9rem; margin-top: 0.25rem; }
+    table.arc th { width: 9rem; text-transform: none; letter-spacing: 0; font-size: 0.88rem; }
+    .scan-line { font-size: 0.86rem; color: var(--text-secondary); margin: 0.75rem 0 0 0; }
+    .loading { color: var(--text-secondary); }
+    .err { color: var(--err); }
+    .muted { color: var(--text-secondary); }
+    .small { font-size: 0.85rem; }
+    pre {
+      background: var(--bg);
+      padding: 0.85rem;
+      overflow: auto;
+      border-radius: 2px;
+      font-size: 0.76rem;
+      border: 1px solid var(--border);
+      max-height: 320px;
+    }
+    details.raw-smart { margin-top: 0.75rem; }
+    details.raw-smart summary { cursor: pointer; color: var(--text-secondary); font-size: 0.86rem; }
   </style>
 </head>
-<body>
-  <h1>zfstool</h1>
-  <nav>
-    <a href="#host">Host</a>
-    <a href="#pools">Pools</a>
-    <a href="#datasets">Datasets</a>
-    <a href="#history">History</a>
-  </nav>
-
-  <section id="host" class="card">
-    <h2>Host</h2>
-    <pre id="host-out">Loading…</pre>
-  </section>
-
-  <section id="pools" class="card">
-    <h2>Pools</h2>
-    <div id="pools-out">Loading…</div>
-  </section>
-
-  <section id="datasets" class="card">
-    <h2>Datasets</h2>
-    <label>Pool filter <input id="pool-filter" placeholder="tank"/></label>
-    <button type="button" id="load-ds">Load</button>
-    <pre id="datasets-out">—</pre>
-  </section>
-
-  <section id="history" class="card">
-    <h2>Pool history</h2>
-    <label>Pool <input id="hist-pool" placeholder="tank"/></label>
-    <button type="button" id="load-hist">Load</button>
-    <pre id="history-out">—</pre>
-  </section>
-
-  <script>
-    async function j(url) {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(await r.text());
-      return r.json();
-    }
-    async function loadHost() {
-      const h = await j('/v1/host');
-      document.getElementById('host-out').textContent = JSON.stringify(h, null, 2);
-    }
-    async function loadPools() {
-      const p = await j('/v1/pools');
-      const el = document.getElementById('pools-out');
-      el.innerHTML = '<table><thead><tr><th>Name</th><th>Health</th><th>Size</th><th>Alloc</th><th>Free</th></tr></thead><tbody>' +
-        p.map(x => `<tr><td><a href="#datasets" data-pool="${x.name}">${x.name}</a></td><td>${x.health}</td><td>${x.size}</td><td>${x.allocated}</td><td>${x.free}</td></tr>`).join('') +
-        '</tbody></table>';
-    }
-    document.getElementById('load-ds').onclick = async () => {
-      const pool = document.getElementById('pool-filter').value.trim();
-      const q = pool ? ('?pool=' + encodeURIComponent(pool)) : '';
-      const d = await j('/v1/datasets' + q);
-      document.getElementById('datasets-out').textContent = JSON.stringify(d, null, 2);
-    };
-    document.getElementById('load-hist').onclick = async () => {
-      const pool = document.getElementById('hist-pool').value.trim();
-      if (!pool) return;
-      const d = await j('/v1/pools/' + encodeURIComponent(pool) + '/history?limit=100');
-      document.getElementById('history-out').textContent = JSON.stringify(d, null, 2);
-    };
-    loadHost().catch(e => document.getElementById('host-out').textContent = e);
-    loadPools().catch(e => document.getElementById('pools-out').textContent = e);
-  </script>
+<!-- Optional: set data-github-repo="https://github.com/org/zfstool" for a Source repository tile. -->
+<body data-github-repo="">
+  <header class="site-header">
+    <div class="site-header-inner">
+      <h1><a href="#/">zfstool</a></h1>
+      <p class="site-tagline">Local ZFS inventory</p>
+    </div>
+  </header>
+  <nav id="crumb" class="crumb--hidden" aria-label="Breadcrumb"></nav>
+  <main id="app"></main>
+  <script src="app.js"></script>
 </body>
 </html>

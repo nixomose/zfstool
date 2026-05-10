@@ -23,15 +23,15 @@ if command -v apt-get >/dev/null 2>&1; then
 	case "$MODE" in
 	build)
 		run apt-get install -y --no-install-recommends \
-			golang-go gcc pkg-config libgtk-3-dev libc6-dev
+			golang-go gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libc6-dev g++
 		;;
 	headless)
 		run apt-get install -y --no-install-recommends golang-go
 		;;
 	deb)
 		run apt-get install -y --no-install-recommends \
-			build-essential dpkg-dev debhelper-compat golang-go gcc pkg-config \
-			libgtk-3-dev libc6-dev
+			build-essential dpkg-dev debhelper-compat golang-go gcc g++ pkg-config \
+			libgtk-3-dev libwebkit2gtk-4.1-dev libc6-dev
 		;;
 	rpm)
 		echo "rpm-deps: use Fedora/RHEL (dnf/yum). On Debian/Ubuntu, only apt is supported." >&2
@@ -44,7 +44,7 @@ fi
 if command -v dnf >/dev/null 2>&1; then
 	case "$MODE" in
 	build)
-		run dnf install -y golang gcc gtk3-devel pkgconf-pkg-config
+		run dnf install -y golang gcc gcc-c++ gtk3-devel webkit2gtk4.1-devel pkgconf-pkg-config
 		;;
 	headless)
 		run dnf install -y golang
@@ -54,7 +54,7 @@ if command -v dnf >/dev/null 2>&1; then
 		exit 1
 		;;
 	rpm)
-		run dnf install -y rpm-build git golang gcc gtk3-devel pkgconf-pkg-config systemd-rpm-macros
+		run dnf install -y rpm-build git golang gcc gcc-c++ gtk3-devel webkit2gtk4.1-devel pkgconf-pkg-config systemd-rpm-macros
 		;;
 	esac
 	exit 0
@@ -63,7 +63,7 @@ fi
 if command -v yum >/dev/null 2>&1; then
 	case "$MODE" in
 	build)
-		run yum install -y golang gcc gtk3-devel pkgconfig
+		run yum install -y golang gcc gcc-c++ gtk3-devel webkit2gtk4.1-devel pkgconfig
 		;;
 	headless)
 		run yum install -y golang
@@ -73,7 +73,7 @@ if command -v yum >/dev/null 2>&1; then
 		exit 1
 		;;
 	rpm)
-		run yum install -y rpm-build git golang gcc gtk3-devel pkgconfig systemd-rpm-macros
+		run yum install -y rpm-build git golang gcc gcc-c++ gtk3-devel webkit2gtk4.1-devel pkgconfig systemd-rpm-macros
 		;;
 	esac
 	exit 0
@@ -82,7 +82,7 @@ fi
 if command -v zypper >/dev/null 2>&1; then
 	case "$MODE" in
 	build)
-		run zypper --non-interactive install go gcc gtk3-devel pkg-config
+		run zypper --non-interactive install go gcc gcc-c++ gtk3-devel webkit2gtk4-devel pkg-config
 		;;
 	headless)
 		run zypper --non-interactive install go
@@ -102,7 +102,7 @@ fi
 if command -v pacman >/dev/null 2>&1; then
 	case "$MODE" in
 	build)
-		run pacman -S --needed --noconfirm go gcc pkgconf gtk3
+		run pacman -S --needed --noconfirm go gcc pkgconf gtk3 webkit2gtk-4.1
 		;;
 	headless)
 		run pacman -S --needed --noconfirm go
@@ -120,5 +120,5 @@ if command -v pacman >/dev/null 2>&1; then
 fi
 
 echo "install-deps.sh: unsupported OS (need apt-get, dnf, yum, zypper, or pacman)." >&2
-echo "Install manually: Go >= 1.22, gcc, pkg-config, GTK 3 development headers." >&2
+echo "Install manually: Go >= 1.22, gcc, g++, pkg-config, GTK 3, WebKit2GTK 4.0 dev." >&2
 exit 1

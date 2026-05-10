@@ -16,12 +16,20 @@ Web
 
 GUI / default command
 -----------------------
-- Running `zfstool` with no subcommand opens the desktop UI (GTK when built with
-  -tags gtk3 and CGO; otherwise the embedded web UI + browser).
+- Running `zfstool` with no subcommand starts an **in-process agent** (unless you pass
+  `-agent-socket` / `-agent-url`), a **loopback HTTP server** for the bundled UI, and
+  a **native WebKit window** (via `webview`) when built with **CGO_ENABLED=1** plus
+  GTK 3 and **WebKit2GTK 4.1** dev packages on Ubuntu 24.04+ (`libwebkit2gtk-4.1-dev`;
+  `make deps`). Ubuntu 22.04 uses 4.0 — see `third_party/README.md`.
+- With **CGO off** or **`-tags browser_gui`** (or **`GOFLAGS`** containing `browser_gui`),
+  the same stack runs but the UI opens in your **default browser** instead of that window.
+  **`make build` clears `GOFLAGS`** so a global setting does not accidentally pick the browser.
+- With no `-agent-url` or `-agent-socket`, the GUI always runs an in-process agent on a
+  private socket and stops it when the GUI exits (`ZFSTOOL_SOCKET` does not apply to the GUI).
 - `zfstool gui` is the same as the default.
 - `zfstool web` and `zfstool agent` are explicit server/daemon modes.
-- Makefile default `make build` uses CGO and `-tags gtk3` (needs libgtk-3-dev).
-- Headless / static binary: `make build-headless` (no GTK; default command uses browser UI).
+- `make build` uses CGO=1 and links GTK (needs libgtk-3-dev). `make build-browser` is
+  browser UI with CGO on; `make build-headless` uses CGO=0.
 
 Remote desktop
 --------------
@@ -40,8 +48,9 @@ Build
 - make deps-headless  install Go only, for make build-headless
 - make deb-deps       install packages for make deb (Debian/Ubuntu apt only)
 - make rpm-deps       install packages for make rpm / make srpm (dnf/yum; zypper for rpm on openSUSE)
-- make build          (GTK UI default; CGO_ENABLED=1, -tags gtk3)
-- make build-headless (CGO off; browser UI when you run zfstool with no args)
+- make build           (native GTK; CGO_ENABLED=1)
+- make build-headless  (CGO off; browser UI)
+- make build-browser   (CGO on, -tags browser_gui; browser UI)
 
 Debian (.deb)
 -------------

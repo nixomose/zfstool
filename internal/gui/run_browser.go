@@ -1,49 +1,35 @@
-//go:build !gtk3
+//go:build !cgo || browser_gui
 
 package gui
 
 import (
-	"flag"
 	"log"
-	"net"
-	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
-
-	"zfstool/internal/web"
 )
 
-// Run starts a local loopback server with static UI + proxy to agent, opens browser.
+// Run starts the same in-process agent + local UI server as the native build, but opens
+// the system browser instead of an embedded WebKit window.
 func Run(args []string) {
-	flg := flag.NewFlagSet("gui", flag.ExitOnError)
-	socket := flg.String("agent-socket", defaultSocket(), "zfstool agent unix socket")
-	noBrowser := flg.Bool("no-browser", false, "do not open a browser window")
-	_ = flg.Parse(args)
+	agentSock, agentURL, noBrowser := parseGUIFlags(args)
 
-	srv, err := web.NewServer("", *socket, "")
+	sess, err := StartLocalSession(agentSock, agentURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	sub, err := web.StaticSubFS()
-	if err != nil {
-		log.Fatal(err)
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/v1/", http.HandlerFunc(srv.ServeProxy))
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	defer sess.Stop()
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		log.Fatal(err)
+	if !noBrowser {
+		go openBrowser(sess.BaseURL)
 	}
-	addr := ln.Addr().String()
-	page := "http://" + addr + "/"
 
-	if !*noBrowser {
-		go openBrowser(page)
-	}
-	log.Printf("zfstool gui %s (agent unix:%s)", page, *socket)
-	log.Fatal(http.Serve(ln, mux))
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	log.Printf("shutting down (%v)", sig)
 }
 
 func openBrowser(url string) {

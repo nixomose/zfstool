@@ -13,10 +13,11 @@ PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
 # For deps targets: privilege wrapper (script clears it when already root).
 SUDO    ?= sudo
-# Default desktop UI: native GTK (needs CGO + libgtk-3). Override: make build-headless
-GTK_TAGS ?= gtk3
+# Native GUI: CGO + GTK3 + WebKit2GTK — a standalone window (NOT your default browser).
+# Browser fallback only if: CGO_ENABLED=0, or -tags browser_gui, or GOFLAGS pollutes tags.
+# Clear GOFLAGS on build lines so a global GOFLAGS=-tags=browser_gui cannot force the browser UI.
 
-.PHONY: all build build-headless install clean deb srpm rpm rpm-tree vendor \
+.PHONY: all build build-headless build-browser install clean deb srpm rpm rpm-tree vendor \
 	deps deps-headless deb-deps rpm-deps help
 
 all: build
@@ -35,15 +36,20 @@ rpm-deps:
 	SUDO='$(SUDO)' ./scripts/install-deps.sh rpm
 
 build:
-	mkdir -p bin
-	CGO_ENABLED=1 go build -trimpath -buildmode=pie -tags '$(GTK_TAGS)' \
+	mkdir -p bin && GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie \
+		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
+		-o bin/zfstool ./cmd/zfstool
+	@echo "bin/zfstool: native window (WebKit). If a browser opens, run: GOFLAGS= CGO_ENABLED=1 go build -o bin/zfstool ./cmd/zfstool"
+
+# Browser UI: no CGO / no WebKit link (opens a browser tab for the UI).
+build-headless:
+	mkdir -p bin && GOFLAGS= CGO_ENABLED=0 go build -trimpath -buildmode=pie \
 		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 
-# Static binary, browser-based UI when you run zfstool with no subcommand (no GTK/CGO).
-build-headless:
-	mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -buildmode=pie \
+# Browser UI while keeping CGO enabled (e.g. other packages need CGO).
+build-browser:
+	mkdir -p bin && GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie -tags browser_gui \
 		-ldflags '-s -w -X zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
 
@@ -85,7 +91,9 @@ vendor:
 	go mod vendor
 
 help:
-	@echo 'Targets: deps, deps-headless, deb-deps, rpm-deps, build (default, GTK+CGO),'
-	@echo '         build-headless, install, clean, deb, rpm, srpm, vendor, help'
-	@echo 'Variables: VERSION=$(VERSION) PREFIX=$(PREFIX) RPMVER=$(RPMVER) RPMREL=$(RPMREL)'
-	@echo '           GTK_TAGS=$(GTK_TAGS) SUDO=$(SUDO)'
+	@echo 'Targets: deps, deps-headless, deb-deps, rpm-deps,'
+	@echo '         build (native WebKit WINDOW — not your browser), build-headless, build-browser,'
+	@echo '         install, clean, deb, rpm, srpm, vendor, help'
+	@echo 'If a browser tab opens: you built the browser variant (CGO off, browser_gui tag, or stale GOFLAGS).'
+	@echo 'Plain go build: GOFLAGS= CGO_ENABLED=1 go build ./cmd/zfstool  (same as make build)'
+	@echo 'Variables: VERSION=$(VERSION) PREFIX=$(PREFIX) RPMVER=$(RPMVER) RPMREL=$(RPMREL) SUDO=$(SUDO)'
