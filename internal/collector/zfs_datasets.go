@@ -10,8 +10,13 @@ import (
 )
 
 // ListDatasets lists all datasets with common columns.
+// Includes filesystems, snapshots, and volumes. (Plain "zfs list" omits snapshots by default.)
 func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
-	args := []string{"list", "-Hp", "-o", "name,type,used,avail,refer,mountpoint,origin"}
+	args := []string{
+		"list", "-Hp",
+		"-t", "filesystem,snapshot,volume",
+		"-o", "name,type,used,avail,refer,mountpoint,origin",
+	}
 	if pool != "" {
 		args = append(args, "-r", pool)
 	}
