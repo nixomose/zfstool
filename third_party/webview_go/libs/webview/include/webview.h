@@ -1284,10 +1284,10 @@ public:
       webkit_settings_set_enable_developer_extras(settings, true);
     }
 
-    if (m_owns_window) {
-      gtk_widget_grab_focus(GTK_WIDGET(m_webview));
-      gtk_widget_show_all(m_window);
-    }
+    // Defer showing the top-level window until run_impl() so webview_set_size
+    // can apply gtk_window_set_default_size before the first map; otherwise
+    // gtk_window_resize after map can leave the window in a poor corner
+    // placement on some window managers.
   }
 
   gtk_webkit_engine(const gtk_webkit_engine &) = delete;
@@ -1318,7 +1318,14 @@ public:
   void *window_impl() override { return (void *)m_window; }
   void *widget_impl() override { return (void *)m_webview; }
   void *browser_controller_impl() override { return (void *)m_webview; };
-  void run_impl() override { gtk_main(); }
+  void run_impl() override {
+    if (m_owns_window && m_window && !gtk_widget_get_visible(m_window)) {
+      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_NONE);
+      gtk_widget_show_all(m_window);
+      gtk_widget_grab_focus(GTK_WIDGET(m_webview));
+    }
+    gtk_main();
+  }
   void terminate_impl() override {
     dispatch_impl([] { gtk_main_quit(); });
   }
@@ -1338,7 +1345,10 @@ public:
   void set_size_impl(int width, int height, webview_hint_t hints) override {
     gtk_window_set_resizable(GTK_WINDOW(m_window), hints != WEBVIEW_HINT_FIXED);
     if (hints == WEBVIEW_HINT_NONE) {
-      gtk_window_resize(GTK_WINDOW(m_window), width, height);
+      gtk_window_set_default_size(GTK_WINDOW(m_window), width, height);
+      if (gtk_widget_get_visible(m_window)) {
+        gtk_window_resize(GTK_WINDOW(m_window), width, height);
+      }
     } else if (hints == WEBVIEW_HINT_FIXED) {
       gtk_widget_set_size_request(m_window, width, height);
     } else {

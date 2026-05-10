@@ -47,7 +47,34 @@
     .site-header-inner {
       max-width: 1120px;
       margin: 0 auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
     }
+    .site-header-brand { min-width: 0; }
+    .btn-exit {
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+      padding: 0.35rem 0.85rem;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .btn-exit:hover {
+      color: var(--text);
+      border-color: var(--border-accent);
+      background: var(--surface);
+    }
+    .btn-exit[hidden] { display: none !important; }
     .site-header h1 {
       font-family: "Source Serif 4", Georgia, serif;
       font-weight: 600;
@@ -283,6 +310,15 @@
     .err { color: var(--err); }
     .muted { color: var(--text-secondary); }
     .small { font-size: 0.85rem; }
+    code.inline-code {
+      font-family: "IBM Plex Sans", ui-monospace, monospace;
+      font-size: 0.9em;
+      background: var(--bg);
+      padding: 0.1em 0.38em;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+    }
+    .smart-install-hint { margin: 0.65rem 0 0 0; max-width: 40rem; }
     pre {
       background: var(--bg);
       padding: 0.85rem;
@@ -300,8 +336,11 @@
 <body data-github-repo="">
   <header class="site-header">
     <div class="site-header-inner">
-      <h1><a href="#/">zfstool</a></h1>
-      <p class="site-tagline">Local ZFS inventory</p>
+      <div class="site-header-brand">
+        <h1><a href="#/">zfstool</a></h1>
+        <p class="site-tagline">Local ZFS inventory</p>
+      </div>
+      <button type="button" class="btn-exit" id="btn-native-exit" hidden>Exit</button>
     </div>
   </header>
   <nav id="crumb" class="crumb--hidden" aria-label="Breadcrumb"></nav>

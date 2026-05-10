@@ -22,6 +22,10 @@ func Run(args []string) {
 	w := webview.New(false)
 	defer w.Destroy()
 
+	if err := w.Bind("zfstoolExit", func() { w.Terminate() }); err != nil {
+		log.Printf("webview: bind zfstoolExit: %v", err)
+	}
+
 	title := "zfstool"
 	if sess.Embedded() {
 		title += " · local"

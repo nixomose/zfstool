@@ -204,6 +204,14 @@
     return '/v1/disk/' + encSeg(seg) + '/smart';
   }
 
+  /** Shown when SMART/smartctl fails (missing binary, permissions, etc.). */
+  function smartInstallHintHtml() {
+    return (
+      '<p class="muted small smart-install-hint">If <code class="inline-code">smartctl</code> is not installed, on Debian or Ubuntu install the package with ' +
+      '<code class="inline-code">apt install smartmontools</code> (then retry this screen).</p>'
+    );
+  }
+
   function summarizeSmart(json) {
     if (!json || typeof json !== 'object') return [];
     const rows = [];
@@ -709,7 +717,7 @@
         smartBlock =
           '<h3 class="sub">SMART</h3>' +
           (smart.error
-            ? '<p class="err small">Warning: ' + esc(smart.error) + '</p>'
+            ? '<p class="err small">Warning: ' + esc(smart.error) + '</p>' + smartInstallHintHtml()
             : '') +
           renderKV(summary) +
           '<details class="raw-smart"><summary>Raw JSON</summary><pre>' +
@@ -718,6 +726,7 @@
       } else if (smart && smart.error) {
         smartBlock =
           '<h3 class="sub">SMART</h3><p class="err">' + esc(smart.error) + '</p>' +
+          smartInstallHintHtml() +
           '<details class="raw-smart"><summary>Response</summary><pre>' +
           esc(JSON.stringify(smart, null, 2)) +
           '</pre></details>';
@@ -839,4 +848,23 @@
 
   window.addEventListener('hashchange', dispatch);
   dispatch();
+
+  function wireNativeExit() {
+    var btn = document.getElementById('btn-native-exit');
+    if (!btn || btn.dataset.wired === '1') return;
+    if (typeof window.zfstoolExit !== 'function') return;
+    btn.hidden = false;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', function () {
+      try {
+        var p = window.zfstoolExit();
+        if (p && typeof p.then === 'function') {
+          p.catch(function () {});
+        }
+      } catch (_) {}
+    });
+  }
+  wireNativeExit();
+  setTimeout(wireNativeExit, 0);
+  setTimeout(wireNativeExit, 100);
 })();

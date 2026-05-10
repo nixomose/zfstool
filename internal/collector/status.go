@@ -9,8 +9,10 @@ import (
 )
 
 // PoolStatusFull returns parsed status + raw text.
+// Uses zpool status -P so the config tree lists full device paths (/dev/...).
+// (-g shows vdev GUIDs, which are not useful for disk counts or SMART paths.)
 func PoolStatusFull(ctx context.Context, pool string) (*api.PoolStatus, error) {
-	out, err := execzfs.RunZpool(ctx, "status", "-g", pool)
+	out, err := execzfs.RunZpool(ctx, "status", "-P", pool)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +103,7 @@ func parseCheckpointLine(line string) *api.Checkpoint {
 }
 
 func parseStatusConfigLine(line string) *api.StatusLine {
-	// zpool status -g uses leading spaces for indent; columns tab or multi-space
+	// zpool status uses leading spaces for indent; columns tab or multi-space
 	orig := line
 	line = strings.TrimRight(line, "\r")
 	if strings.TrimSpace(line) == "" {

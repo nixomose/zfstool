@@ -32,7 +32,7 @@ type PoolSummary struct {
 	AltRoot      string  `json:"altroot,omitempty"`
 }
 
-// PoolStatus is parsed zpool status -g style tree + raw lines for maintenance.
+// PoolStatus is parsed zpool status -P style tree + raw lines for maintenance.
 type PoolStatus struct {
 	Pool       string       `json:"pool"`
 	State      string       `json:"state"`
@@ -44,7 +44,7 @@ type PoolStatus struct {
 	Raw        string       `json:"raw,omitempty"`
 }
 
-// StatusLine is one line in zpool status -g output.
+// StatusLine is one line in zpool status config output.
 type StatusLine struct {
 	Indent int    `json:"indent"`
 	Name   string `json:"name"`

@@ -26,4 +26,32 @@ errors: No known data errors
 	if len(st.Config) < 2 {
 		t.Fatalf("config lines %d", len(st.Config))
 	}
+	devs := MapVDevToDevices(st.Config)
+	if len(devs) != 2 {
+		t.Fatalf("MapVDevToDevices: got %v want 2 disks", devs)
+	}
+	if devs[0] != "/dev/sda" || devs[1] != "/dev/sdb" {
+		t.Fatalf("MapVDevToDevices paths: %v", devs)
+	}
+}
+
+func TestMapVDevToDevicesFullPaths(t *testing.T) {
+	raw := `config:
+
+	NAME        STATE     READ WRITE CKSUM
+	tank        ONLINE       0     0     0
+	  mirror-0  ONLINE       0     0     0
+	    /dev/sda1     ONLINE       0     0     0
+	    /dev/sdb1     ONLINE       0     0     0
+
+errors: No known data errors
+`
+	st := parseStatus(raw)
+	devs := MapVDevToDevices(st.Config)
+	if len(devs) != 2 {
+		t.Fatalf("got %v", devs)
+	}
+	if devs[0] != "/dev/sda1" || devs[1] != "/dev/sdb1" {
+		t.Fatalf("paths %v", devs)
+	}
 }
