@@ -1320,11 +1320,12 @@ public:
   void *browser_controller_impl() override { return (void *)m_webview; };
   void run_impl() override {
     if (m_owns_window && m_window && !gtk_widget_get_visible(m_window)) {
-      // GTK_WIN_POS_NONE still maps to an awkward corner on some compositors;
-      // center explicitly so placement is predictable without fixed x/y coords.
-      gtk_window_set_gravity(GTK_WINDOW(m_window), GDK_GRAVITY_CENTER);
-      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_CENTER);
+      // Client hints are ignored on some Wayland setups; explicit move after
+      // show still improves placement vs default bottom-right on many WMs.
+      gtk_window_set_gravity(GTK_WINDOW(m_window), GDK_GRAVITY_NORTH_WEST);
+      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_NONE);
       gtk_widget_show_all(m_window);
+      gtk_window_move(GTK_WINDOW(m_window), 48, 48);
       gtk_widget_grab_focus(GTK_WIDGET(m_webview));
     }
     gtk_main();

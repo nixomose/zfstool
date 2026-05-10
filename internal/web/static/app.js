@@ -817,41 +817,67 @@
     }
   }
 
-  function navigateRoute(r) {
+  async function navigateRoute(r) {
     switch (r.kind) {
       case 'home':
-        renderHome();
+        await renderHome();
         break;
       case 'host':
-        renderHost();
+        await renderHost();
         break;
       case 'pool':
-        renderPool(r.parts[0]);
+        await renderPool(r.parts[0]);
         break;
       case 'vdev':
-        renderVdev(r.parts[0], r.parts[1]);
+        await renderVdev(r.parts[0], r.parts[1]);
         break;
       case 'disk':
-        renderDisk(r.parts[0], r.parts[1]);
+        await renderDisk(r.parts[0], r.parts[1]);
         break;
       case 'dataset':
-        renderDatasetLike('dataset', r.parts[0], r.parts[1]);
+        await renderDatasetLike('dataset', r.parts[0], r.parts[1]);
         break;
       case 'zvol':
-        renderDatasetLike('zvol', r.parts[0], r.parts[1]);
+        await renderDatasetLike('zvol', r.parts[0], r.parts[1]);
         break;
       default:
-        renderHome();
+        await renderHome();
     }
   }
 
   function dispatch() {
-    navigateRoute(parseRoute());
+    navigateRoute(parseRoute()).catch(function (err) {
+      if (typeof console !== 'undefined' && console.error) {
+        console.error(err);
+      }
+    });
   }
 
-  function refreshCurrentView() {
+  async function refreshCurrentView() {
+    var x =
+      window.scrollX != null
+        ? window.scrollX
+        : document.documentElement.scrollLeft || document.body.scrollLeft || 0;
+    var y =
+      window.scrollY != null
+        ? window.scrollY
+        : document.documentElement.scrollTop || document.body.scrollTop || 0;
     poolsCache = null;
-    navigateRoute(parseRoute());
+    try {
+      await navigateRoute(parseRoute());
+    } catch (err) {
+      if (typeof console !== 'undefined' && console.error) {
+        console.error(err);
+      }
+    }
+    function restoreScroll() {
+      window.scrollTo(x, y);
+    }
+    restoreScroll();
+    requestAnimationFrame(function () {
+      restoreScroll();
+      requestAnimationFrame(restoreScroll);
+    });
   }
 
   function invokeNativeExit() {
@@ -872,7 +898,11 @@
     function (e) {
       if (e.key === 'F5') {
         e.preventDefault();
-        refreshCurrentView();
+        refreshCurrentView().catch(function (err) {
+          if (typeof console !== 'undefined' && console.error) {
+            console.error(err);
+          }
+        });
         return;
       }
       if (
