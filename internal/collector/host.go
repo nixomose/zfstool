@@ -115,7 +115,7 @@ func (h *Host) readZFSVersion(ctx context.Context) error {
 		if strings.HasPrefix(ln, "zfs-") {
 			user = ln
 		}
-		if strings.Contains(ln, "zfs-kmod") || strings.Contains(ln, "ZFS") && strings.Contains(ln, "module") {
+		if strings.Contains(ln, "zfs-kmod") || (strings.Contains(ln, "ZFS") && strings.Contains(ln, "module")) {
 			kernel = ln
 		}
 	}

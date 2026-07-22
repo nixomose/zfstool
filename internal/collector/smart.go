@@ -3,7 +3,11 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -11,16 +15,62 @@ import (
 	"github.com/nixomose/zfstool/internal/api"
 )
 
+// ErrInvalidDevice is returned when a SMART device path escapes /dev or is malformed.
+var ErrInvalidDevice = errors.New("invalid block device path")
+
+// ValidateBlockDevicePath normalizes and restricts a device path to under /dev/.
+// Rejects path traversal (e.g. /dev/../../etc/passwd) and symlink escapes out of /dev.
+func ValidateBlockDevicePath(device string) (string, error) {
+	device = strings.TrimSpace(device)
+	if device == "" {
+		return "", fmt.Errorf("%w: empty", ErrInvalidDevice)
+	}
+	if strings.ContainsRune(device, 0) || strings.ContainsAny(device, "\n\r") {
+		return "", fmt.Errorf("%w: control characters", ErrInvalidDevice)
+	}
+	if !strings.HasPrefix(device, "/dev/") {
+		device = "/dev/" + strings.TrimPrefix(device, "/")
+	}
+	cleaned := filepath.Clean(device)
+	if !isUnderDev(cleaned) {
+		return "", fmt.Errorf("%w: must be under /dev", ErrInvalidDevice)
+	}
+	resolved, err := filepath.EvalSymlinks(cleaned)
+	if err == nil {
+		resolved = filepath.Clean(resolved)
+		if !isUnderDev(resolved) {
+			return "", fmt.Errorf("%w: symlink escapes /dev", ErrInvalidDevice)
+		}
+		return resolved, nil
+	}
+	// Non-existent devices are OK (smartctl reports the failure); keep cleaned path.
+	if _, statErr := os.Lstat(cleaned); statErr != nil && os.IsNotExist(statErr) {
+		return cleaned, nil
+	}
+	// Broken symlink or unreadable: still allow if cleaned stays under /dev.
+	return cleaned, nil
+}
+
+func isUnderDev(p string) bool {
+	return strings.HasPrefix(p, "/dev/") && p != "/dev/"
+}
+
 // SMARTJSON runs smartctl -a -j device (best effort).
+// device must pass ValidateBlockDevicePath.
 func SMARTJSON(ctx context.Context, device string) (*api.SMARTDisk, error) {
+	safe, err := ValidateBlockDevicePath(device)
+	if err != nil {
+		return nil, err
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "smartctl", "-a", "-j", device)
+	// "--" is ignored by smartctl but documents intent; device is already validated.
+	cmd := exec.CommandContext(ctx, "smartctl", "-a", "-j", safe)
 	out, err := cmd.Output()
-	d := &api.SMARTDisk{Device: device}
+	d := &api.SMARTDisk{Device: safe}
 	if err != nil {
 		d.Error = err.Error()
 		return d, nil
@@ -121,10 +171,9 @@ func normalizeDiskPath(n string) string {
 		return n
 	}
 	if strings.HasPrefix(n, "/") {
+		// Non-/dev absolute paths are not used for smartctl from the API;
+		// keep as-is only for display of unusual vdev names.
 		return n
-	}
-	if strings.Contains(n, "/") {
-		return "/dev/" + n
 	}
 	return "/dev/" + n
 }

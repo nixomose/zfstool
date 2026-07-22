@@ -149,9 +149,38 @@ More detail: [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt).
 
 The agent exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`**, for example:
 
-- `/v1/host`, `/v1/pools`, `/v1/pools/{pool}/status`, `/v1/datasets`, `/v1/datasets/properties`, `/v1/disk/{dev}/smart`, …
+- `/v1/host`, `/v1/pools`, `/v1/pools/{pool}/status`, `/v1/datasets`, `/v1/datasets/properties`
+- `/v1/disks` (aggregate block devices across pools), `/v1/disk/{dev}/smart`
+- `/v1/pools/{pool}/history`, `/maintenance`, `/properties`, `/devices`
+- `/v1/bookmarks`, `/v1/snapshots/holds`, `/v1/iostat`, `/v1/graph`, `/v1/kernel-log`, `/v1/module-params`, `/v1/zfs-allow`
+- `POST /v1/zfs-diff` — `{ "from", "to" }`
 
 The UI and `zfstool web` proxy this tree to the agent socket or TCP backend.
+
+---
+
+## Remoting
+
+**SSH local forward** (recommended):
+
+```bash
+# on the ZFS host (or via systemd zfstool-agent + optional -http):
+zfstool agent -socket /run/zfstool/agent.sock -http 127.0.0.1:8787
+
+# on your workstation:
+ssh -L 8787:127.0.0.1:8787 user@zfs-host
+zfstool gui -agent-url http://127.0.0.1:8787
+# or open http://127.0.0.1:8787/ if using `zfstool web` on the host
+```
+
+**Packaged agent:** after installing the `.deb` / RPM:
+
+```bash
+sudo systemctl enable --now zfstool-agent
+# API: unix:/run/zfstool/agent.sock
+```
+
+Non-loopback `zfstool web` requires `ZFSTOOL_WEB_USER` + `ZFSTOOL_WEB_PASSWORD` (or bcrypt hash). See the **Remote** page in the UI for copy-paste snippets.
 
 ---
 

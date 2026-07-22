@@ -6,13 +6,18 @@ import (
 
 	"github.com/nixomose/zfstool/internal/api"
 	"github.com/nixomose/zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 // PoolStatusFull returns parsed status + raw text.
 // Uses zpool status -P so the config tree lists full device paths (/dev/...).
 // (-g shows vdev GUIDs, which are not useful for disk counts or SMART paths.)
 func PoolStatusFull(ctx context.Context, pool string) (*api.PoolStatus, error) {
-	out, err := execzfs.RunZpool(ctx, "status", "-P", pool)
+	args, err := zfsname.Append([]string{"status", "-P"}, "pool", pool)
+	if err != nil {
+		return nil, err
+	}
+	out, err := execzfs.RunZpool(ctx, args...)
 	if err != nil {
 		return nil, err
 	}

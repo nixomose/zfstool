@@ -5,11 +5,16 @@ import (
 	"strings"
 
 	"github.com/nixomose/zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 // ZfsDiff runs zfs diff -H from to (snapshots or dataset versions).
 func ZfsDiff(ctx context.Context, from, to string) (string, error) {
-	out, err := execzfs.RunZfs(ctx, "diff", "-H", from, to)
+	args, err := zfsname.Append2([]string{"diff", "-H"}, "from", from, "to", to)
+	if err != nil {
+		return "", err
+	}
+	out, err := execzfs.RunZfs(ctx, args...)
 	if err != nil {
 		return "", err
 	}

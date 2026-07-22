@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 
@@ -68,8 +69,26 @@ If neither is set, an embedded agent runs in-process. ZFSTOOL_SOCKET is not used
 func runAgent(args []string) {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
 	socket := fs.String("socket", defaultSocket(), "unix socket path")
-	httpAddr := fs.String("http", "", "optional TCP listen address (e.g. 127.0.0.1:8787)")
+	httpAddr := fs.String("http", "", "optional TCP listen address (e.g. 127.0.0.1:8787); unauthenticated — prefer Unix socket")
+	allowRemote := fs.Bool("allow-remote-http", false, "allow -http to bind a non-loopback address (dangerous: no auth)")
 	_ = fs.Parse(args)
+
+	if *httpAddr != "" {
+		host, _, err := net.SplitHostPort(*httpAddr)
+		if err != nil {
+			log.Fatalf("invalid -http address %q: %v", *httpAddr, err)
+		}
+		ip := net.ParseIP(host)
+		loopback := host == "localhost" || (ip != nil && ip.IsLoopback())
+		if !loopback && !*allowRemote {
+			log.Fatalf("refusing non-loopback -http %q without -allow-remote-http (agent API has no authentication)", *httpAddr)
+		}
+		if !loopback {
+			log.Printf("WARNING: agent TCP on %s is unauthenticated; anyone who can reach it can read ZFS/SMART/logs", *httpAddr)
+		} else {
+			log.Printf("WARNING: agent TCP on %s is unauthenticated; prefer Unix socket for production", *httpAddr)
+		}
+	}
 
 	srv := agent.NewServer()
 	srv.SocketPath = *socket

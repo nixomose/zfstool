@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 // KernelLogSnippet returns recent kernel lines mentioning zfs or pool.
@@ -67,9 +69,12 @@ func ModuleParams() map[string]string {
 
 // ZfsAllowOutput runs zfs allow dataset (may fail without permission).
 func ZfsAllowOutput(ctx context.Context, dataset string) (string, error) {
+	if err := zfsname.Check("dataset", dataset); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "zfs", "allow", dataset)
+	cmd := exec.CommandContext(ctx, "zfs", "allow", "--", dataset)
 	out, err := cmd.Output()
 	return string(out), err
 }

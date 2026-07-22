@@ -3,14 +3,15 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nixomose/zfstool/internal/api"
 	"github.com/nixomose/zfstool/internal/collector"
 	"github.com/nixomose/zfstool/internal/version"
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -21,6 +22,18 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func writeErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, api.ErrorBody{Error: msg, Code: http.StatusText(status)})
+}
+
+// writeClientErr maps validation errors to 400; returns true if handled.
+func writeClientErr(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, collector.ErrInvalidDevice) || errors.Is(err, zfsname.ErrInvalid) {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return true
+	}
+	return false
 }
 
 func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
@@ -60,12 +73,11 @@ func (s *Server) handlePools(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePoolStatus(w http.ResponseWriter, r *http.Request) {
 	pool := r.PathValue("pool")
-	if pool == "" {
-		writeErr(w, http.StatusBadRequest, "missing pool")
-		return
-	}
 	st, err := collector.PoolStatusFull(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -76,6 +88,9 @@ func (s *Server) handlePoolProps(w http.ResponseWriter, r *http.Request) {
 	pool := r.PathValue("pool")
 	props, src, err := collector.PoolProperties(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -91,6 +106,9 @@ func (s *Server) handlePoolHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, err := collector.PoolHistory(r.Context(), pool, off, lim)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -101,6 +119,9 @@ func (s *Server) handlePoolMaintenance(w http.ResponseWriter, r *http.Request) {
 	pool := r.PathValue("pool")
 	mb, err := collector.Maintenance(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -111,6 +132,9 @@ func (s *Server) handleDatasets(w http.ResponseWriter, r *http.Request) {
 	pool := r.URL.Query().Get("pool")
 	rows, err := collector.ListDatasets(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -125,6 +149,9 @@ func (s *Server) handleDatasetProps(w http.ResponseWriter, r *http.Request) {
 	}
 	props, src, err := collector.GetDatasetProperties(r.Context(), name)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -135,6 +162,9 @@ func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 	pool := r.URL.Query().Get("pool")
 	rows, err := collector.ListBookmarks(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -149,6 +179,9 @@ func (s *Server) handleHolds(w http.ResponseWriter, r *http.Request) {
 	}
 	h, err := collector.Holds(r.Context(), snap)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -172,6 +205,9 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	g, err := collector.BuildDatasetGraph(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -200,10 +236,22 @@ func (s *Server) handleZfsAllow(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := collector.ZfsAllowOutput(r.Context(), ds)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"output": out})
+}
+
+func (s *Server) handleDisks(w http.ResponseWriter, r *http.Request) {
+	disks, err := collector.ListDisks(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, disks)
 }
 
 func (s *Server) handleSmart(w http.ResponseWriter, r *http.Request) {
@@ -212,11 +260,16 @@ func (s *Server) handleSmart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "device required")
 		return
 	}
-	if !strings.HasPrefix(dev, "/dev/") {
-		dev = "/dev/" + dev
-	}
-	d, err := collector.SMARTJSON(r.Context(), dev)
+	safe, err := collector.ValidateBlockDevicePath(dev)
 	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	d, err := collector.SMARTJSON(r.Context(), safe)
+	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -227,6 +280,9 @@ func (s *Server) handlePoolDevices(w http.ResponseWriter, r *http.Request) {
 	pool := r.PathValue("pool")
 	st, err := collector.PoolStatusFull(r.Context(), pool)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -254,9 +310,11 @@ func (s *Server) handleZfsDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	// zfs diff -H snapshot1 snapshot2 or filesystem
 	out, err := collector.ZfsDiff(ctx, body.From, body.To)
 	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

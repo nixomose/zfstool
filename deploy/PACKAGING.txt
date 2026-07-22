@@ -4,9 +4,12 @@ zfstool packaging notes
 Agent (systemd)
 ---------------
 - Install binary to /usr/bin/zfstool.
-- Install deploy/zfstool-agent.service to /etc/systemd/system/zfstool-agent.service.
+- Deb/RPM packages install deploy/zfstool-agent.service as zfstool-agent.service
+  under the distro unit directory (not enabled by default).
 - systemctl daemon-reload && systemctl enable --now zfstool-agent
 - Socket path defaults to /run/zfstool/agent.sock (RuntimeDirectory=zfstool).
+- For remoting, either add -http 127.0.0.1:8787 to ExecStart, or run
+  `zfstool web` separately and SSH-forward that port (see README Remoting).
 
 Web
 ---

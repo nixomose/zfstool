@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/subtle"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -36,6 +38,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				return
 			}
 			if err := pamAuth(s.PAMService, user, pass); err != nil {
+				log.Printf("web auth: PAM failed for user %q from %s", user, r.RemoteAddr)
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
@@ -50,21 +53,22 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		ru, rp, ok := r.BasicAuth()
-		if !ok || ru != u {
+		if !ok || subtle.ConstantTimeCompare([]byte(ru), []byte(u)) != 1 {
 			w.Header().Set("WWW-Authenticate", `Basic realm="zfstool"`)
+			log.Printf("web auth: unauthorized from %s", r.RemoteAddr)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if hash != "" {
 			if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(rp)); err != nil {
+				log.Printf("web auth: bad password for user %q from %s", ru, r.RemoteAddr)
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-		} else {
-			if rp != p {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
+		} else if subtle.ConstantTimeCompare([]byte(rp), []byte(p)) != 1 {
+			log.Printf("web auth: bad password for user %q from %s", ru, r.RemoteAddr)
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})

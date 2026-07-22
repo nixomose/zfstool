@@ -7,6 +7,7 @@ import (
 
 	"github.com/nixomose/zfstool/internal/api"
 	"github.com/nixomose/zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 // ListDatasets lists all datasets with common columns.
@@ -18,7 +19,11 @@ func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 		"-o", "name,type,used,avail,refer,mountpoint,origin",
 	}
 	if pool != "" {
-		args = append(args, "-r", pool)
+		var err error
+		args, err = zfsname.Append(append(args, "-r"), "pool", pool)
+		if err != nil {
+			return nil, err
+		}
 	}
 	out, err := execzfs.RunZfs(ctx, args...)
 	if err != nil {
@@ -55,9 +60,13 @@ func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 	return rows, nil
 }
 
-// GetDatasetProperties runs zfs get -H -p -s local,default,inherited,received -o name,property,value,source all dataset
+// GetDatasetProperties runs zfs get -H -p -o property,value,source all dataset
 func GetDatasetProperties(ctx context.Context, name string) (map[string]string, map[string]string, error) {
-	out, err := execzfs.RunZfs(ctx, "get", "-H", "-p", "-o", "property,value,source", "all", name)
+	args, err := zfsname.Append([]string{"get", "-H", "-p", "-o", "property,value,source", "all"}, "dataset", name)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := execzfs.RunZfs(ctx, args...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -85,7 +94,11 @@ func GetDatasetProperties(ctx context.Context, name string) (map[string]string, 
 func ListBookmarks(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 	args := []string{"list", "-Hp", "-t", "bookmark", "-o", "name"}
 	if pool != "" {
-		args = append(args, "-r", pool)
+		var err error
+		args, err = zfsname.Append(append(args, "-r"), "pool", pool)
+		if err != nil {
+			return nil, err
+		}
 	}
 	out, err := execzfs.RunZfs(ctx, args...)
 	if err != nil {
@@ -108,7 +121,11 @@ func ListBookmarks(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 
 // Holds returns zfs holds for a snapshot.
 func Holds(ctx context.Context, snap string) (map[string]string, error) {
-	out, err := execzfs.RunZfs(ctx, "holds", "-H", snap)
+	args, err := zfsname.Append([]string{"holds", "-H"}, "snapshot", snap)
+	if err != nil {
+		return nil, err
+	}
+	out, err := execzfs.RunZfs(ctx, args...)
 	if err != nil {
 		return nil, err
 	}

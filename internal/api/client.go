@@ -9,4 +9,5 @@ type Client interface {
 	PoolStatus(ctx context.Context, pool string) (*PoolStatus, error)
 	PoolHistory(ctx context.Context, pool string, offset, limit int) ([]PoolHistoryEntry, error)
 	ListDatasets(ctx context.Context, pool string) ([]DatasetRow, error)
+	ListDisks(ctx context.Context) ([]DiskSummary, error)
 }

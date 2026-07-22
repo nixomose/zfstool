@@ -41,6 +41,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /v1/kernel-log", s.handleKernelLog)
 	m.HandleFunc("GET /v1/module-params", s.handleModuleParams)
 	m.HandleFunc("GET /v1/zfs-allow", s.handleZfsAllow)
+	m.HandleFunc("GET /v1/disks", s.handleDisks)
 	m.HandleFunc("GET /v1/disk/{dev}/smart", s.handleSmart)
 	m.HandleFunc("POST /v1/zfs-diff", s.handleZfsDiff)
 }
@@ -51,7 +52,7 @@ func (s *Server) ListenUnix() (net.Listener, error) {
 		return nil, os.ErrInvalid
 	}
 	dir := filepath.Dir(s.SocketPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	_ = os.Remove(s.SocketPath)

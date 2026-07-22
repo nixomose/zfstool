@@ -167,3 +167,12 @@ func (c *HTTPClient) ListDatasets(ctx context.Context, pool string) ([]api.Datas
 	}
 	return rows, nil
 }
+
+// ListDisks fetches aggregated block devices across pools.
+func (c *HTTPClient) ListDisks(ctx context.Context) ([]api.DiskSummary, error) {
+	var disks []api.DiskSummary
+	if err := c.get(ctx, "/v1/disks", &disks); err != nil {
+		return nil, err
+	}
+	return disks, nil
+}

@@ -4,6 +4,16 @@ bin/zfstool
 *.exe
 *.test
 dist/
+build/
+
+# Debian packaging intermediates (keep debian/control, rules, …)
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/zfstool/
+debian/*.debhelper
+debian/*.substvars
+debian/*.debhelper.log
 
 # Local / secrets
 .env

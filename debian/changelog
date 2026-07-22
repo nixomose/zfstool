@@ -1,3 +1,11 @@
+zfstool (0.2.0-1) unstable; urgency=medium
+
+  * Dense sidebar UI with expandable pools/disks, cross-links, and list filters.
+  * Surface more agent APIs in the UI; add /v1/disks aggregate endpoint.
+  * Remoting docs; agent TCP bind guards; packaging/gitignore polish.
+
+ -- nixomose <nixomose@gmail.com>  Wed, 22 Jul 2026 21:05:38 +0000
+
 zfstool (0.1.0-2) unstable; urgency=medium
 
   * Default zfstool command opens GTK UI; build with -tags gtk3 and GTK build-deps.

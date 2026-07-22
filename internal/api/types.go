@@ -111,6 +111,19 @@ type IOStatSample struct {
 	Raw   []string `json:"raw,omitempty"`
 }
 
+// DiskMembership is one pool that uses a block device as a vdev leaf.
+type DiskMembership struct {
+	Pool  string `json:"pool"`
+	State string `json:"state,omitempty"`
+	Path  string `json:"path,omitempty"` // topology path under the pool
+}
+
+// DiskSummary is a unique block device found across pool status trees.
+type DiskSummary struct {
+	Device string           `json:"device"`
+	Pools  []DiskMembership `json:"pools,omitempty"`
+}
+
 // SMARTDisk is placeholder structure; filled by smartctl later.
 type SMARTDisk struct {
 	Device string                 `json:"device"`

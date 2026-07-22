@@ -7,11 +7,16 @@ import (
 
 	"github.com/nixomose/zfstool/internal/api"
 	"github.com/nixomose/zfstool/internal/execzfs"
+	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
 // PoolHistory runs zpool history -l pool with optional tail via offset/limit (post-filter).
 func PoolHistory(ctx context.Context, pool string, offset, limit int) ([]api.PoolHistoryEntry, error) {
-	out, err := execzfs.RunZpool(ctx, "history", "-l", pool)
+	args, err := zfsname.Append([]string{"history", "-l"}, "pool", pool)
+	if err != nil {
+		return nil, err
+	}
+	out, err := execzfs.RunZpool(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +50,11 @@ func PoolHistory(ctx context.Context, pool string, offset, limit int) ([]api.Poo
 
 // PoolProperties runs zpool get all pool -> map
 func PoolProperties(ctx context.Context, pool string) (map[string]string, map[string]string, error) {
-	out, err := execzfs.RunZpool(ctx, "get", "-H", "-p", "-o", "property,value,source", "all", pool)
+	args, err := zfsname.Append([]string{"get", "-H", "-p", "-o", "property,value,source", "all"}, "pool", pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := execzfs.RunZpool(ctx, args...)
 	if err != nil {
 		return nil, nil, err
 	}
