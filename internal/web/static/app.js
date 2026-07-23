@@ -44,6 +44,102 @@
     return x + ' B';
   }
 
+  function fmtIntCommas(n) {
+    const x = Number(n);
+    if (!isFinite(x)) return null;
+    const neg = x < 0;
+    const s = String(Math.abs(Math.round(x)));
+    const withCommas = s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (neg ? '-' : '') + withCommas;
+  }
+
+  /** Byte-valued zfs properties (zfs get -p returns integer bytes). */
+  const ZFS_BYTE_PROPS = {
+    available: 1,
+    used: 1,
+    referenced: 1,
+    logicalused: 1,
+    logicalreferenced: 1,
+    written: 1,
+    usedbysnapshots: 1,
+    usedbydataset: 1,
+    usedbychildren: 1,
+    usedbyrefreservation: 1,
+    refreservation: 1,
+    reservation: 1,
+    quota: 1,
+    refquota: 1,
+    recordsize: 1,
+    volsize: 1,
+    volblocksize: 1,
+    size: 1,
+    allocated: 1,
+    free: 1,
+    checkpoint: 1,
+    expandsize: 1,
+  };
+
+  const ZFS_TIME_PROPS = {
+    creation: 1,
+  };
+
+  const ZFS_INT_PROPS = {
+    createtxg: 1,
+    objsetid: 1,
+    guid: 1,
+    filesystem_count: 1,
+    snapshot_count: 1,
+    filesystem_limit: 1,
+    snapshot_limit: 1,
+  };
+
+  /** Format a zfs property value for display (HTML-safe). */
+  function fmtZfsProp(key, raw) {
+    if (raw == null || raw === '') return '—';
+    const s = String(raw);
+    if (
+      s === 'none' ||
+      s === '-' ||
+      s === 'off' ||
+      s === 'on' ||
+      s === 'default' ||
+      s === 'N/A'
+    ) {
+      return esc(s);
+    }
+    if (ZFS_TIME_PROPS[key]) {
+      const sec = Number(s);
+      if (!isFinite(sec) || sec <= 0) return esc(s);
+      const d = new Date(sec * 1000);
+      if (isNaN(d.getTime())) return esc(s);
+      return (
+        esc(
+          d.toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
+        ) +
+        ' <span class="muted mono">(' +
+        esc(fmtIntCommas(sec) || s) +
+        ')</span>'
+      );
+    }
+    if (ZFS_BYTE_PROPS[key] && /^\d+$/.test(s)) {
+      const commas = fmtIntCommas(s);
+      const human = fmtBytes(s);
+      if (Number(s) === 0) return '0 B';
+      return esc(commas) + ' <span class="muted">(' + esc(human) + ')</span>';
+    }
+    if (ZFS_INT_PROPS[key] && /^-?\d+$/.test(s)) {
+      return esc(fmtIntCommas(s) || s);
+    }
+    return esc(s);
+  }
+
   function fmtUptime(sec) {
     const s = Number(sec);
     if (!isFinite(s) || s < 0) return '—';
@@ -1391,7 +1487,7 @@
         const propRows = Object.keys(mb.props || {})
           .sort()
           .map(function (k) {
-            return [k, mb.props[k]];
+            return [k, fmtZfsProp(k, mb.props[k])];
           });
         body =
           '<div class="panel">' +
@@ -1408,16 +1504,16 @@
           ) +
           '</div>' +
           (propRows.length
-            ? '<h3 class="sub">Properties</h3>' + renderKV(propRows)
+            ? '<h3 class="sub">Properties</h3>' + renderKV(propRows, true)
             : '');
       } else if (tab === 'props') {
         const pmap = (props && props.properties) || {};
         const rows = Object.keys(pmap)
           .sort()
           .map(function (k) {
-            return [k, pmap[k]];
+            return [k, fmtZfsProp(k, pmap[k])];
           });
-        body = '<div class="panel">' + renderKV(rows) + '</div>';
+        body = '<div class="panel">' + renderKV(rows, true) + '</div>';
       } else if (tab === 'io') {
         const samples = (iostat || []).filter(function (s) {
           return !s.pool || s.pool === poolName || s.pool === 'pool';
@@ -1788,7 +1884,7 @@
       for (let i = 0; i < interesting.length; i++) {
         const k = interesting[i];
         if (props[k] == null) continue;
-        let val = esc(props[k]);
+        let val = fmtZfsProp(k, props[k]);
         if (k === 'origin' && props[k]) val = dsLink(props[k]);
         if (k === 'mountpoint' && props[k] && props[k].charAt(0) === '/') {
           val = '<span class="mono">' + esc(props[k]) + '</span>';
@@ -1801,7 +1897,7 @@
         })
         .sort()
         .map(function (k) {
-          return [k, esc(props[k])];
+          return [k, fmtZfsProp(k, props[k])];
         });
 
       let holdsBlock = '';
