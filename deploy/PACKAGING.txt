@@ -24,6 +24,9 @@ GUI / default command
   a **native WebKit window** (via `webview`) when built with **CGO_ENABLED=1** plus
   GTK 3 and **WebKit2GTK 4.1** dev packages on Ubuntu 24.04+ (`libwebkit2gtk-4.1-dev`;
   `make deps`). Ubuntu 22.04 uses 4.0 — see `third_party/README.md`.
+- Deb/RPM packages install `zfstool.desktop` and hicolor icons (`Icon=zfstool`) so
+  desktop environments (XFCE, GNOME, …) show the branded launcher/window icon.
+  The native binary also embeds the icon for unpackaged/local builds.
 - With **CGO off** or **`-tags browser_gui`** (or **`GOFLAGS`** containing `browser_gui`),
   the same stack runs but the UI opens in your **default browser** instead of that window.
   **`make build` clears `GOFLAGS`** so a global setting does not accidentally pick the browser.

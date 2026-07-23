@@ -19,6 +19,8 @@ func Run(args []string) {
 	}
 	defer sess.Stop()
 
+	initNativeAppIdentity()
+
 	w := webview.New(false)
 	defer w.Destroy()
 
@@ -32,6 +34,7 @@ func Run(args []string) {
 	}
 	w.SetTitle(title)
 	w.SetSize(1100, 720, webview.HintNone)
+	setNativeWindowIcon(w.Window())
 	w.Navigate(sess.BaseURL)
 	w.Run()
 }

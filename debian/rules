@@ -17,6 +17,14 @@ override_dh_auto_install:
 	install -D -m0755 zfstool debian/zfstool/usr/bin/zfstool
 	install -D -m0644 deploy/zfstool-agent.service \
 		debian/zfstool/usr/lib/systemd/system/zfstool-agent.service
+	install -D -m0644 deploy/zfstool.desktop \
+		debian/zfstool/usr/share/applications/zfstool.desktop
+	set -e; for sz in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do \
+		install -D -m0644 deploy/icons/hicolor/$$sz/apps/zfstool.png \
+			debian/zfstool/usr/share/icons/hicolor/$$sz/apps/zfstool.png; \
+	done
+	install -D -m0644 deploy/icons/hicolor/scalable/apps/zfstool.svg \
+		debian/zfstool/usr/share/icons/hicolor/scalable/apps/zfstool.svg
 
 override_dh_auto_test:
 	@:

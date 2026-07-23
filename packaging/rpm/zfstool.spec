@@ -42,11 +42,21 @@ go build -trimpath -buildmode=pie \
 %install
 install -D -m0755 zfstool %{buildroot}%{_bindir}/zfstool
 install -D -m0644 deploy/zfstool-agent.service %{buildroot}%{_unitdir}/zfstool-agent.service
+install -D -m0644 deploy/zfstool.desktop %{buildroot}%{_datadir}/applications/zfstool.desktop
+for sz in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do
+  install -D -m0644 deploy/icons/hicolor/${sz}/apps/zfstool.png \
+    %{buildroot}%{_datadir}/icons/hicolor/${sz}/apps/zfstool.png
+done
+install -D -m0644 deploy/icons/hicolor/scalable/apps/zfstool.svg \
+  %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/zfstool.svg
 
 %files
 %doc debian/copyright
 %{_bindir}/zfstool
 %{_unitdir}/zfstool-agent.service
+%{_datadir}/applications/zfstool.desktop
+%{_datadir}/icons/hicolor/*/apps/zfstool.png
+%{_datadir}/icons/hicolor/scalable/apps/zfstool.svg
 
 %post
 %systemd_post zfstool-agent.service

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=zfstool
+GenericName=ZFS inspector
+Comment=Read-only ZFS and host inspection
+Exec=zfstool
+Icon=zfstool
+Terminal=false
+Categories=System;Monitor;Filesystem;
+Keywords=ZFS;storage;pool;SMART;disk;
+StartupNotify=true
+StartupWMClass=zfstool

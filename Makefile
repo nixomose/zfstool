@@ -56,6 +56,13 @@ build-browser:
 install: build
 	install -d '$(DESTDIR)$(BINDIR)'
 	install -m0755 bin/zfstool '$(DESTDIR)$(BINDIR)/zfstool'
+	install -D -m0644 deploy/zfstool.desktop '$(DESTDIR)$(PREFIX)/share/applications/zfstool.desktop'
+	@for sz in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do \
+		install -D -m0644 deploy/icons/hicolor/$$sz/apps/zfstool.png \
+			'$(DESTDIR)$(PREFIX)/share/icons/hicolor/'$$sz'/apps/zfstool.png'; \
+	done
+	install -D -m0644 deploy/icons/hicolor/scalable/apps/zfstool.svg \
+		'$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/zfstool.svg'
 
 clean:
 	rm -rf bin build/rpm
