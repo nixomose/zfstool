@@ -1,3 +1,12 @@
+zfstool (0.2.2-1) unstable; urgency=medium
+
+  * Fix SMART display: keep smartctl JSON when exit status is non-zero (bitmask).
+  * Classify SMART errors (missing package vs permission vs other) with accurate UI hints.
+  * Hint to add user to the disk group when not running as root.
+
+ -- nixomose <nixomose@gmail.com>  Thu, 23 Jul 2026 18:10:37 +0000
+
+
 zfstool (0.2.1-1) unstable; urgency=medium
 
   * Add branded desktop icon and .desktop launcher for XFCE and other DEs.
