@@ -124,11 +124,19 @@ type DiskSummary struct {
 	Pools  []DiskMembership `json:"pools,omitempty"`
 }
 
+// SMART error_kind values for UI hints.
+const (
+	SMARTErrorNotFound   = "not_found"   // smartctl binary missing
+	SMARTErrorPermission = "permission" // cannot open block device
+	SMARTErrorFailed     = "failed"     // smartctl ran but returned no usable data
+)
+
 // SMARTDisk is placeholder structure; filled by smartctl later.
 type SMARTDisk struct {
-	Device string                 `json:"device"`
-	JSON   map[string]interface{} `json:"json,omitempty"`
-	Error  string                 `json:"error,omitempty"`
+	Device    string                 `json:"device"`
+	JSON      map[string]interface{} `json:"json,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	ErrorKind string                 `json:"error_kind,omitempty"` // not_found | permission | failed
 }
 
 // ErrorBody is JSON error envelope.

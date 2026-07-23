@@ -212,11 +212,25 @@
     return '/v1/disk/' + encSeg(seg) + '/smart';
   }
 
-  function smartInstallHintHtml() {
-    return (
-      '<p class="muted small">If <code class="inline-code">smartctl</code> is missing: ' +
-      '<code class="inline-code">apt install smartmontools</code></p>'
-    );
+  function smartHintHtml(smart) {
+    const kind = (smart && smart.error_kind) || '';
+    if (kind === 'not_found') {
+      return (
+        '<p class="muted small">Install smartctl: ' +
+        '<code class="inline-code">apt install smartmontools</code> ' +
+        '(package name may differ on other distros).</p>'
+      );
+    }
+    if (kind === 'permission') {
+      return (
+        '<p class="muted small">If not running as root, add your user to the ' +
+        '<code class="inline-code">disk</code> group: ' +
+        '<code class="inline-code">sudo usermod -aG disk $USER</code> ' +
+        'then log out and back in.</p>'
+      );
+    }
+    // smartctl is present but returned no usable SMART data — don't suggest apt install.
+    return '';
   }
 
   function summarizeSmart(json) {
@@ -1531,7 +1545,7 @@
           '<h3 class="sub">SMART</h3><div class="panel"><p class="err">' +
           esc(smart.error) +
           '</p>' +
-          smartInstallHintHtml() +
+          smartHintHtml(smart) +
           '</div>';
       } else {
         smartBlock = '<h3 class="sub">SMART</h3><p class="muted">No SMART data.</p>';
