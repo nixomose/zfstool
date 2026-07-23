@@ -546,7 +546,10 @@
       const h = await getHost();
       const host = h.hostname || 'local';
       connPill.innerHTML =
-        '<a href="#/remote" title="Remoting / agent">' + esc(host) + '</a>';
+        '<a href="#/remote" title="Remote hostname — how to connect from another machine">' +
+        'remote · ' +
+        esc(host) +
+        '</a>';
       topbarMeta.textContent =
         (h.hostname || 'host') +
         ' · ' +
@@ -556,7 +559,7 @@
         (h.osVersion ? ' ' + h.osVersion : '');
     } catch (e) {
       connPill.textContent = 'offline';
-      topbarMeta.textContent = 'Agent unreachable: ' + (e.message || e);
+      topbarMeta.textContent = 'Server unreachable: ' + (e.message || e);
     }
   }
 
@@ -964,7 +967,7 @@
               ['Uptime', fmtUptime(h.uptimeSeconds)],
               ['Memory', mem],
               ['ZFS', ''],
-              ['Agent', h.agentVersion || '—'],
+              ['Server', h.agentVersion || '—'],
               ['Collected', h.collectedAt || '—'],
             ],
             false
@@ -1040,6 +1043,96 @@
     );
   }
 
+  function snapshotDatasetName(snap) {
+    const i = String(snap).indexOf('@');
+    return i >= 0 ? snap.slice(0, i) : '';
+  }
+
+  /** Options for zfs diff "to": live filesystem of the from-snap, then sibling snapshots. */
+  function diffToOptionsHtml(fromSnap, snapshots, filterQ) {
+    const ds = snapshotDatasetName(fromSnap);
+    const q = String(filterQ || '')
+      .trim()
+      .toLowerCase();
+    const opts = [];
+    if (ds) {
+      const liveLabel = ds + ' (live)';
+      if (!q || liveLabel.toLowerCase().indexOf(q) >= 0) {
+        opts.push({ value: ds, label: liveLabel });
+      }
+    }
+    snapshots.forEach(function (n) {
+      if (n === fromSnap) return;
+      if (ds && snapshotDatasetName(n) !== ds) return;
+      if (q && String(n).toLowerCase().indexOf(q) < 0) return;
+      opts.push({ value: n, label: n });
+    });
+    if (!opts.length) {
+      return '<option value="">No matching targets</option>';
+    }
+    return opts
+      .map(function (o) {
+        return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+      })
+      .join('');
+  }
+
+  function snapshotOptionsHtml(snapshots, selected) {
+    if (!snapshots.length) {
+      return '<option value="">No matching snapshots</option>';
+    }
+    return snapshots
+      .map(function (n) {
+        return (
+          '<option value="' +
+          esc(n) +
+          '"' +
+          (n === selected ? ' selected' : '') +
+          '>' +
+          esc(n) +
+          '</option>'
+        );
+      })
+      .join('');
+  }
+
+  function filterSnapshotNames(snapshots, query) {
+    const q = String(query || '')
+      .trim()
+      .toLowerCase();
+    if (!q) return snapshots.slice();
+    return snapshots.filter(function (n) {
+      return String(n).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  /** Rebuild From/To selects from the full snapshot list and optional substring filter. */
+  function rebuildDiffSelects(fromEl, toEl, snapNames, filterQ, preferFrom, preferTo) {
+    const filtered = filterSnapshotNames(snapNames, filterQ);
+    let fromVal = preferFrom || fromEl.value;
+    if (filtered.indexOf(fromVal) < 0) {
+      fromVal = filtered[0] || '';
+    }
+    fromEl.innerHTML = snapshotOptionsHtml(filtered, fromVal);
+    fromEl.disabled = !fromVal;
+
+    const toHtml = fromVal
+      ? diffToOptionsHtml(fromVal, snapNames, filterQ)
+      : '<option value="">Select a From snapshot</option>';
+    const prevTo = preferTo != null ? preferTo : toEl.value;
+    toEl.innerHTML = toHtml;
+    toEl.disabled = !fromVal;
+    if (prevTo) {
+      for (let i = 0; i < toEl.options.length; i++) {
+        if (toEl.options[i].value === prevTo) {
+          toEl.selectedIndex = i;
+          break;
+        }
+      }
+    }
+    return filtered.length;
+  }
+
   async function renderRemote() {
     renderBreadcrumbs([
       { label: 'Overview', hash: '/' },
@@ -1048,18 +1141,27 @@
     const gh = (document.body.getAttribute('data-github-repo') || '').trim();
     appEl.innerHTML =
       '<h2 class="page-title">Remote access</h2>' +
-      '<p class="lede">Point the UI at an agent on another host over SSH, or serve the bundled UI with auth.</p>' +
+      '<p class="lede">The top-bar link shows the <strong>remote hostname</strong> of the ZFS machine whose API this UI is talking to. To browse from another computer you need three pieces: the API server on the ZFS host, the web front-end on that same host, then a connection from your workstation.</p>' +
       '<div class="panel">' +
-      '<h3 class="sub" style="margin-top:0">SSH port forward</h3>' +
+      '<h3 class="sub" style="margin-top:0">1. On the ZFS host — start the API server</h3>' +
+      '<p class="muted">Creates the Unix socket the web UI proxies to. Leave this running.</p>' +
+      '<pre>zfstool server\n' +
+      '# or explicit socket:\nzfstool server -socket /run/zfstool/agent.sock\n' +
+      '# packaged install:\nsudo systemctl enable --now zfstool-agent\n# socket: /run/zfstool/agent.sock</pre>' +
+      '<h3 class="sub">2. On the ZFS host — start the web front-end</h3>' +
+      '<p class="muted"><code>zfstool web</code> serves the UI and proxies <code>/v1</code> to the API server. It does not start the server itself.</p>' +
+      '<pre>zfstool web -listen 127.0.0.1:8787 -agent-socket /run/zfstool/agent.sock</pre>' +
+      '<h3 class="sub">3. From your workstation — connect</h3>' +
+      '<p class="muted">SSH-forward the web port, then open the local URL in a browser (or point the desktop GUI at it).</p>' +
       '<pre>ssh -L 8787:127.0.0.1:8787 user@zfs-host\n' +
-      '# on the remote host:\nzfstool agent -socket /run/zfstool/agent.sock -http 127.0.0.1:8787\n' +
-      '# or:\nzfstool web -listen 127.0.0.1:8787 -agent-socket /run/zfstool/agent.sock</pre>' +
-      '<h3 class="sub">Local GUI → remote agent</h3>' +
-      '<pre>zfstool gui -agent-url http://127.0.0.1:8787\nzfstool -agent-socket /run/zfstool/agent.sock</pre>' +
-      '<h3 class="sub">Web auth (non-loopback)</h3>' +
+      '# then open http://127.0.0.1:8787/\n' +
+      '# or desktop GUI:\nzfstool gui -agent-url http://127.0.0.1:8787</pre>' +
+      '<h3 class="sub">Web auth (non-loopback listen)</h3>' +
+      '<p class="muted">Only needed if <code>zfstool web</code> binds outside loopback (e.g. <code>0.0.0.0</code>).</p>' +
       '<pre>export ZFSTOOL_WEB_USER=admin\nexport ZFSTOOL_WEB_PASSWORD=secret\nzfstool web -listen 0.0.0.0:8787 -agent-socket /run/zfstool/agent.sock</pre>' +
-      '<h3 class="sub">systemd agent</h3>' +
-      '<pre>sudo systemctl enable --now zfstool-agent\n# socket: /run/zfstool/agent.sock</pre>' +
+      '<h3 class="sub">API-only alternative</h3>' +
+      '<p class="muted">If you only need the JSON API (no bundled UI), the server can also listen on TCP:</p>' +
+      '<pre>zfstool server -socket /run/zfstool/agent.sock -http 127.0.0.1:8787</pre>' +
       (gh
         ? '<p class="small muted">Source: <a href="' +
           esc(gh) +
@@ -1371,14 +1473,38 @@
           (Array.isArray(klog) && klog.length ? esc(klog.join('\n')) : 'No matching lines.') +
           '</pre>';
       } else if (tab === 'diff') {
-        body =
-          '<div class="panel">' +
-          '<p class="muted small">POST /v1/zfs-diff — compare two snapshots or a snapshot and a live dataset.</p>' +
-          '<div class="form-row">' +
-          '<input id="diff-from" placeholder="pool/ds@snap1" />' +
-          '<input id="diff-to" placeholder="pool/ds@snap2 or pool/ds" />' +
-          '<button type="button" class="btn primary" id="diff-run">Diff</button>' +
-          '</div><pre id="diff-out" hidden></pre></div>';
+        const snapshots = datasets
+          .filter(function (d) {
+            return d.type === 'snapshot';
+          })
+          .map(function (d) {
+            return d.name;
+          })
+          .sort();
+        if (!snapshots.length) {
+          body =
+            '<div class="panel"><p class="muted">No snapshots in this pool. Create a snapshot to use Diff.</p></div>';
+        } else {
+          const defaultFrom = snapshots[0];
+          body =
+            '<div class="panel">' +
+            '<p class="muted small">Compare a snapshot to the live filesystem or another snapshot on the same dataset (<code class="inline-code">zfs diff</code>).</p>' +
+            '<div class="list-filter">' +
+            '<input type="search" id="diff-filter" class="list-filter-input" placeholder="Filter snapshots…" autocomplete="off" spellcheck="false" />' +
+            '<span class="list-filter-count" id="diff-filter-count" hidden></span>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<label for="diff-from">From</label>' +
+            '<select id="diff-from">' +
+            snapshotOptionsHtml(snapshots, defaultFrom) +
+            '</select>' +
+            '<label for="diff-to">To</label>' +
+            '<select id="diff-to">' +
+            diffToOptionsHtml(defaultFrom, snapshots) +
+            '</select>' +
+            '<button type="button" class="btn primary" id="diff-run">Diff</button>' +
+            '</div><pre id="diff-out" hidden></pre></div>';
+        }
       }
 
       appEl.innerHTML =
@@ -1403,12 +1529,51 @@
         body;
 
       if (tab === 'diff') {
+        const fromEl = document.getElementById('diff-from');
+        const toEl = document.getElementById('diff-to');
         const btn = document.getElementById('diff-run');
-        if (btn) {
+        const filterEl = document.getElementById('diff-filter');
+        const filterCountEl = document.getElementById('diff-filter-count');
+        const snapNames = datasets
+          .filter(function (d) {
+            return d.type === 'snapshot';
+          })
+          .map(function (d) {
+            return d.name;
+          })
+          .sort();
+
+        function updateFilterCount(shown) {
+          if (!filterCountEl || !filterEl) return;
+          const q = filterEl.value.trim();
+          if (q && snapNames.length) {
+            filterCountEl.hidden = false;
+            filterCountEl.textContent = shown + '/' + snapNames.length;
+          } else {
+            filterCountEl.hidden = true;
+            filterCountEl.textContent = '';
+          }
+        }
+
+        if (fromEl && toEl && filterEl) {
+          filterEl.addEventListener('input', function () {
+            const shown = rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value);
+            updateFilterCount(shown);
+          });
+          fromEl.onchange = function () {
+            rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value, fromEl.value, toEl.value);
+          };
+        }
+        if (btn && fromEl && toEl) {
           btn.onclick = async function () {
-            const from = document.getElementById('diff-from').value.trim();
-            const to = document.getElementById('diff-to').value.trim();
+            const from = fromEl.value.trim();
+            const to = toEl.value.trim();
             const out = document.getElementById('diff-out');
+            if (!from || !to) {
+              out.hidden = false;
+              out.textContent = 'Select both From and To.';
+              return;
+            }
             out.hidden = false;
             out.textContent = 'Running…';
             try {

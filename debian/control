@@ -13,8 +13,8 @@ Package: zfstool
 Architecture: any
 Depends: ${misc:Depends}, ${shlibs:Depends}, zfsutils-linux
 Recommends: smartmontools
-Description: read-only ZFS and host inspection tool (agent, web UI, GUI)
- zfstool runs a small agent that exposes pool and host data over a Unix
- socket (HTTP). The default command opens a local WebKit UI; zfstool web
- serves the same UI over HTTP. A systemd unit is included for the agent
- (zfstool-agent.service).
+Description: read-only ZFS and host inspection tool (API server, web UI, GUI)
+ zfstool runs a small API server (zfstool server) that exposes pool and
+ host data over a Unix socket (HTTP). The default command opens a local
+ WebKit UI; zfstool web serves the same UI over HTTP (proxies to the API
+ server). A systemd unit is included (zfstool-agent.service).

@@ -1,25 +1,28 @@
 zfstool packaging notes
 =======================
 
-Agent (systemd)
----------------
+API server (systemd)
+--------------------
 - Install binary to /usr/bin/zfstool.
 - Deb/RPM packages install deploy/zfstool-agent.service as zfstool-agent.service
-  under the distro unit directory (not enabled by default).
+  under the distro unit directory (not enabled by default). The unit runs
+  `zfstool server`.
 - systemctl daemon-reload && systemctl enable --now zfstool-agent
 - Socket path defaults to /run/zfstool/agent.sock (RuntimeDirectory=zfstool).
-- For remoting, either add -http 127.0.0.1:8787 to ExecStart, or run
-  `zfstool web` separately and SSH-forward that port (see README Remoting).
+- For remoting, run `zfstool web` separately (after the API server) and
+  SSH-forward that port (see README Remoting). Optional: add
+  -http 127.0.0.1:8787 to ExecStart for API-only TCP.
 
 Web
 ---
-- zfstool web -listen 0.0.0.0:8787 -agent-socket /run/zfstool/agent.sock
+- Start the API server first, then:
+  zfstool web -listen 0.0.0.0:8787 -agent-socket /run/zfstool/agent.sock
 - Loopback clients: no HTTP auth.
 - Remote clients: set ZFSTOOL_WEB_USER and ZFSTOOL_WEB_PASSWORD (or ZFSTOOL_WEB_BCRYPT_HASH), or build with PAM support when added.
 
 GUI / default command
 -----------------------
-- Running `zfstool` with no subcommand starts an **in-process agent** (unless you pass
+- Running `zfstool` with no subcommand starts an **in-process API server** (unless you pass
   `-agent-socket` / `-agent-url`), a **loopback HTTP server** for the bundled UI, and
   a **native WebKit window** (via `webview`) when built with **CGO_ENABLED=1** plus
   GTK 3 and **WebKit2GTK 4.1** dev packages on Ubuntu 24.04+ (`libwebkit2gtk-4.1-dev`;
@@ -30,17 +33,18 @@ GUI / default command
 - With **CGO off** or **`-tags browser_gui`** (or **`GOFLAGS`** containing `browser_gui`),
   the same stack runs but the UI opens in your **default browser** instead of that window.
   **`make build` clears `GOFLAGS`** so a global setting does not accidentally pick the browser.
-- With no `-agent-url` or `-agent-socket`, the GUI always runs an in-process agent on a
+- With no `-agent-url` or `-agent-socket`, the GUI always runs an in-process API server on a
   private socket and stops it when the GUI exits (`ZFSTOOL_SOCKET` does not apply to the GUI).
 - `zfstool gui` is the same as the default.
-- `zfstool web` and `zfstool agent` are explicit server/daemon modes.
+- `zfstool server` and `zfstool web` are explicit daemon modes (API server, then web front-end).
 - `make build` uses CGO=1 and links GTK (needs libgtk-3-dev). `make build-browser` is
   browser UI with CGO on; `make build-headless` uses CGO=0.
 
 Remote desktop
 --------------
-- SSH local forward: ssh -L 8787:127.0.0.1:8787 user@zfs-host
-- Run agent with -http 127.0.0.1:8787 or use zfstool web on host.
+- On ZFS host: zfstool server, then zfstool web -listen 127.0.0.1:8787 …
+- On workstation: ssh -L 8787:127.0.0.1:8787 user@zfs-host
+- Open http://127.0.0.1:8787/ or zfstool gui -agent-url http://127.0.0.1:8787
 
 Dependencies (runtime)
 ----------------------

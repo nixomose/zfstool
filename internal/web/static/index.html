@@ -414,7 +414,13 @@
       align-items: center;
       margin: 0.35rem 0;
     }
-    .form-row input {
+    .form-row label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-right: 0.1rem;
+    }
+    .form-row input,
+    .form-row select {
       font: inherit;
       font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 0.75rem;
@@ -424,6 +430,10 @@
       background: var(--bg);
       color: var(--text);
       min-width: 12rem;
+      max-width: min(36rem, 100%);
+    }
+    .form-row select {
+      min-width: 16rem;
     }
     .filterable { margin-bottom: 0.5rem; }
     .list-filter {
@@ -479,7 +489,7 @@
     <aside class="sidebar" aria-label="Navigation">
       <div class="sidebar-brand">
         <a href="#/">zfstool</a>
-        <span class="conn-pill" id="conn-pill" title="Agent connection">…</span>
+        <span class="conn-pill" id="conn-pill" title="Remote hostname">…</span>
       </div>
       <div class="sidebar-scroll" id="sidebar-nav">
         <p class="nav-empty">Loading…</p>

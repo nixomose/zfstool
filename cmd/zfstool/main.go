@@ -35,8 +35,8 @@ func main() {
 		}
 	}
 	switch first {
-	case "agent":
-		runAgent(os.Args[2:])
+	case "server", "agent": // "agent" kept as alias
+		runServer(os.Args[2:])
 	case "web":
 		web.Run(os.Args[2:])
 	case "gui":
@@ -54,20 +54,25 @@ func main() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `usage:
-  zfstool [gui flags]     open the desktop app (WebKit window + in-process agent; else browser)
+  zfstool [gui flags]     open the desktop app (WebKit window + in-process server; else browser)
   zfstool gui [flags]   same as above, explicit
-  zfstool agent [flags] run the API agent (Unix socket)
-  zfstool web [flags]   run the HTTP server + web UI
+  zfstool server [flags]  run the API server (Unix socket)
+  zfstool web [flags]   run the HTTP front-end + web UI (proxies to the API server)
   zfstool version       print version
   zfstool help          show this message
 
-gui flags: -agent-url for a remote HTTP agent; -agent-socket for an external Unix agent.
-If neither is set, an embedded agent runs in-process. ZFSTOOL_SOCKET is not used for the GUI.
+gui flags: -agent-url for a remote HTTP API; -agent-socket for an external Unix API server.
+If neither is set, an embedded API server runs in-process. ZFSTOOL_SOCKET is not used for the GUI.
+
+Typical browser setup (two processes on the ZFS host):
+  zfstool server
+  zfstool web
+  then open http://127.0.0.1:8787/
 `)
 }
 
-func runAgent(args []string) {
-	fs := flag.NewFlagSet("agent", flag.ExitOnError)
+func runServer(args []string) {
+	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	socket := fs.String("socket", defaultSocket(), "unix socket path")
 	httpAddr := fs.String("http", "", "optional TCP listen address (e.g. 127.0.0.1:8787); unauthenticated — prefer Unix socket")
 	allowRemote := fs.Bool("allow-remote-http", false, "allow -http to bind a non-loopback address (dangerous: no auth)")
@@ -81,12 +86,12 @@ func runAgent(args []string) {
 		ip := net.ParseIP(host)
 		loopback := host == "localhost" || (ip != nil && ip.IsLoopback())
 		if !loopback && !*allowRemote {
-			log.Fatalf("refusing non-loopback -http %q without -allow-remote-http (agent API has no authentication)", *httpAddr)
+			log.Fatalf("refusing non-loopback -http %q without -allow-remote-http (API server has no authentication)", *httpAddr)
 		}
 		if !loopback {
-			log.Printf("WARNING: agent TCP on %s is unauthenticated; anyone who can reach it can read ZFS/SMART/logs", *httpAddr)
+			log.Printf("WARNING: server TCP on %s is unauthenticated; anyone who can reach it can read ZFS/SMART/logs", *httpAddr)
 		} else {
-			log.Printf("WARNING: agent TCP on %s is unauthenticated; prefer Unix socket for production", *httpAddr)
+			log.Printf("WARNING: server TCP on %s is unauthenticated; prefer Unix socket for production", *httpAddr)
 		}
 	}
 

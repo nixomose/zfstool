@@ -7,7 +7,7 @@
 Name:           zfstool
 Version:        %{ver}
 Release:        %{rel}%{?dist}
-Summary:        Read-only ZFS and host inspection tool (agent, web UI, GUI)
+Summary:        Read-only ZFS and host inspection tool (API server, web UI, GUI)
 License:        MIT
 URL:            https://github.com/nixomose/zfstool
 Source0:       %{name}-%{version}.tar.gz
@@ -19,14 +19,14 @@ BuildRequires:  pkgconfig(gtk+-3.0)
 BuildRequires:  pkgconfig(webkit2gtk-4.1)
 BuildRequires:  systemd-rpm-macros
 
-# ZFS userland is required to use the agent meaningfully; package names vary by distro/repo.
+# ZFS userland is required to use the API server meaningfully; package names vary by distro/repo.
 Recommends:     zfs
 
 %description
-zfstool runs a small agent that exposes pool and host data over a Unix socket
-(HTTP). The default command opens a GTK UI when built with CGO and GTK; use zfstool web
-for the browser server. A systemd unit is
-included for the agent (zfstool-agent.service).
+zfstool runs a small API server (zfstool server) that exposes pool and host
+data over a Unix socket (HTTP). The default command opens a GTK UI when built
+with CGO and GTK; use zfstool web for the browser front-end (after starting
+the API server). A systemd unit is included (zfstool-agent.service).
 
 %prep
 %setup -q -n %{name}-%{version}

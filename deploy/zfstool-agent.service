@@ -1,10 +1,10 @@
 [Unit]
-Description=zfstool ZFS read-only agent (HTTP API on Unix socket)
+Description=zfstool ZFS read-only API server (HTTP API on Unix socket)
 After=network.target local-fs.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/zfstool agent -socket /run/zfstool/agent.sock
+ExecStart=/usr/bin/zfstool server -socket /run/zfstool/agent.sock
 RuntimeDirectory=zfstool
 RuntimeDirectoryMode=0750
 Restart=on-failure

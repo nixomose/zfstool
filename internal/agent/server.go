@@ -77,7 +77,7 @@ func (s *Server) ListenAndServeUnix() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("zfstool agent listening unix:%s", s.SocketPath)
+	log.Printf("zfstool server listening unix:%s", s.SocketPath)
 	return s.Serve(ln)
 }
 
@@ -86,7 +86,7 @@ func (s *Server) ListenAndServeTCP() error {
 	if s.HTTPAddr == "" {
 		return os.ErrInvalid
 	}
-	log.Printf("zfstool agent listening tcp:%s", s.HTTPAddr)
+	log.Printf("zfstool server listening tcp:%s", s.HTTPAddr)
 	return http.ListenAndServe(s.HTTPAddr, s.mux)
 }
 

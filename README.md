@@ -11,10 +11,10 @@ The default command opens a **desktop UI** (native **WebKit** window on Linux wh
 ## What it does
 
 - **GUI / web UI:** Browse storage pools, drill down into vdevs and disks, view dataset and zvol properties, and open SMART details where `smartctl` is available.
-- **Agent:** Serves a JSON HTTP API over a **Unix domain socket** (and optionally TCP) for the UI and for tools that speak HTTP.
+- **API server:** Serves a JSON HTTP API over a **Unix domain socket** (and optionally TCP) for the UI and for tools that speak HTTP.
 - **Host view:** OS, kernel, memory, ZFS versions, ARC stats.
 
-Data comes from `zfs(8)`, `zpool(8)`, and related read-only sources on the machine where the agent runs.
+Data comes from `zfs(8)`, `zpool(8)`, and related read-only sources on the machine where the API server runs.
 
 ---
 
@@ -51,33 +51,39 @@ zfstool
 zfstool gui
 ```
 
-With **no** `-agent-socket` / `-agent-url`, the app starts an **embedded agent** on a private socket and tears it down when you exit. **`ZFSTOOL_SOCKET` is not used** for this mode.
+With **no** `-agent-socket` / `-agent-url`, the app starts an **embedded API server** on a private socket and tears it down when you exit. **`ZFSTOOL_SOCKET` is not used** for this mode.
 
-Point at an existing agent:
+Point at an existing API server:
 
 ```bash
 zfstool -agent-socket /run/zfstool/agent.sock
 zfstool -agent-url http://127.0.0.1:8787
 ```
 
-### Agent daemon
+### API server
 
 Serves the API on a Unix socket (default under `XDG_RUNTIME_DIR` or `/run/zfstool/agent.sock` if set up that way). Optional TCP:
 
 ```bash
-zfstool agent -socket /run/zfstool/agent.sock
-zfstool agent -socket /run/zfstool/agent.sock -http 127.0.0.1:8787
+zfstool server -socket /run/zfstool/agent.sock
+zfstool server -socket /run/zfstool/agent.sock -http 127.0.0.1:8787
 ```
 
 See [`deploy/zfstool-agent.service`](deploy/zfstool-agent.service) and [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt) for **systemd** layout.
 
-### Web server + static UI
+### Web front-end + static UI
 
-Proxies **`/v1/*`** to the agent and serves the bundled UI on **`/`**:
+`zfstool web` does **not** start the API server. Run `zfstool server` first (or use the systemd unit), then start the web front-end. It proxies **`/v1/*`** to the API server and serves the bundled UI on **`/`**:
 
 ```bash
+# terminal 1
+zfstool server -socket /run/zfstool/agent.sock
+
+# terminal 2
 zfstool web -listen 127.0.0.1:8787 -agent-socket /run/zfstool/agent.sock
 ```
+
+Then open http://127.0.0.1:8787/ .
 
 - **Loopback** access is unauthenticated by default.
 - For **remote** access, set **`ZFSTOOL_WEB_USER`** and **`ZFSTOOL_WEB_PASSWORD`** (or **`ZFSTOOL_WEB_BCRYPT_HASH`**) as documented in [`internal/web/auth.go`](internal/web/auth.go).
@@ -147,7 +153,7 @@ More detail: [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt).
 
 ## API
 
-The agent exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`**, for example:
+The API server exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`**, for example:
 
 - `/v1/host`, `/v1/pools`, `/v1/pools/{pool}/status`, `/v1/datasets`, `/v1/datasets/properties`
 - `/v1/disks` (aggregate block devices across pools), `/v1/disk/{dev}/smart`
@@ -155,25 +161,31 @@ The agent exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`**, f
 - `/v1/bookmarks`, `/v1/snapshots/holds`, `/v1/iostat`, `/v1/graph`, `/v1/kernel-log`, `/v1/module-params`, `/v1/zfs-allow`
 - `POST /v1/zfs-diff` — `{ "from", "to" }`
 
-The UI and `zfstool web` proxy this tree to the agent socket or TCP backend.
+The UI and `zfstool web` proxy this tree to the API server socket or TCP backend.
 
 ---
 
 ## Remoting
 
-**SSH local forward** (recommended):
+Three steps: **API server** on the ZFS host, **web front-end** on that host, then **connect** from your workstation.
 
 ```bash
-# on the ZFS host (or via systemd zfstool-agent + optional -http):
-zfstool agent -socket /run/zfstool/agent.sock -http 127.0.0.1:8787
+# 1) on the ZFS host — API server (or: sudo systemctl enable --now zfstool-agent)
+zfstool server -socket /run/zfstool/agent.sock
 
-# on your workstation:
+# 2) on the ZFS host — web UI (proxies /v1 to the socket above)
+zfstool web -listen 127.0.0.1:8787 -agent-socket /run/zfstool/agent.sock
+
+# 3) on your workstation — SSH forward, then open the UI
 ssh -L 8787:127.0.0.1:8787 user@zfs-host
+# browser: http://127.0.0.1:8787/
+# or desktop GUI:
 zfstool gui -agent-url http://127.0.0.1:8787
-# or open http://127.0.0.1:8787/ if using `zfstool web` on the host
 ```
 
-**Packaged agent:** after installing the `.deb` / RPM:
+**API-only** (no bundled UI): `zfstool server -socket /run/zfstool/agent.sock -http 127.0.0.1:8787`.
+
+**Packaged API server:** after installing the `.deb` / RPM:
 
 ```bash
 sudo systemctl enable --now zfstool-agent
@@ -186,7 +198,7 @@ Non-loopback `zfstool web` requires `ZFSTOOL_WEB_USER` + `ZFSTOOL_WEB_PASSWORD` 
 
 ## Security notes
 
-- Tooling is intended to be **read-only** with respect to ZFS; still run the agent with appropriate **filesystem and socket permissions**.
+- Tooling is intended to be **read-only** with respect to ZFS; still run the API server with appropriate **filesystem and socket permissions**.
 - Do not expose **`zfstool web`** to untrusted networks without **HTTP auth** (env-based basic auth as implemented in the code).
 - **SSH example:** `ssh -L 8787:127.0.0.1:8787 user@zfs-host` then open the UI against `127.0.0.1:8787`.
 
