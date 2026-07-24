@@ -34,6 +34,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /v1/pools/{pool}/devices", s.handlePoolDevices)
 	m.HandleFunc("GET /v1/datasets", s.handleDatasets)
 	m.HandleFunc("GET /v1/datasets/properties", s.handleDatasetProps)
+	m.HandleFunc("GET /v1/browse", s.handleBrowse)
 	m.HandleFunc("GET /v1/bookmarks", s.handleBookmarks)
 	m.HandleFunc("GET /v1/snapshots/holds", s.handleHolds)
 	m.HandleFunc("GET /v1/iostat", s.handleIOStat)

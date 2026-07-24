@@ -152,3 +152,19 @@ type DatasetGraphNode struct {
 	Origin   string   `json:"origin,omitempty"`
 	Children []string `json:"children,omitempty"`
 }
+
+// BrowseEntry is one directory entry under a dataset/snapshot mount.
+type BrowseEntry struct {
+	Name string `json:"name"`
+	Type string `json:"type"` // dir, file, symlink, …
+	Size int64  `json:"size,omitempty"`
+}
+
+// BrowseResult is the response for GET /v1/browse.
+type BrowseResult struct {
+	Dataset   string        `json:"dataset"`
+	Path      string        `json:"path"`
+	Root      string        `json:"root,omitempty"`
+	Entries   []BrowseEntry `json:"entries"`
+	Truncated bool          `json:"truncated,omitempty"`
+}

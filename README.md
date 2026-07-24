@@ -159,6 +159,7 @@ The API server exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`
 - `/v1/disks` (aggregate block devices across pools), `/v1/disk/{dev}/smart`
 - `/v1/pools/{pool}/history`, `/maintenance`, `/properties`, `/devices`
 - `/v1/bookmarks`, `/v1/snapshots/holds`, `/v1/iostat`, `/v1/graph`, `/v1/kernel-log`, `/v1/module-params`, `/v1/zfs-allow`
+- `GET /v1/browse?dataset=&path=` — list files/dirs under a filesystem or snapshot mount (confined)
 - `POST /v1/zfs-diff` — `{ "from", "to" }`
 
 The UI and `zfstool web` proxy this tree to the API server socket or TCP backend.

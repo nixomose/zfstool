@@ -12,6 +12,8 @@
     disksOpen: true,
     poolKids: {},
     diskKids: {},
+    dsOpen: {}, // filesystem or snapshot name → expanded
+    dirOpen: {}, // dataset + '\n' + relPath → expanded
     smart: {},
   };
 
@@ -720,6 +722,10 @@
       '|' +
       JSON.stringify(nav.diskKids) +
       '|' +
+      JSON.stringify(nav.dsOpen) +
+      '|' +
+      JSON.stringify(nav.dirOpen) +
+      '|' +
       Object.keys(nav.smart)
         .filter(function (k) {
           return nav.smart[k] && nav.smart[k].ready;
@@ -870,6 +876,23 @@
     });
   }
 
+  function browseStateKey(dataset, path) {
+    return dataset + '\t' + (path || '');
+  }
+
+  function shortDatasetLabel(name, pool) {
+    if (!name) return '';
+    const at = name.indexOf('@');
+    if (at >= 0) return '@' + name.slice(at + 1);
+    if (pool && name.indexOf(pool + '/') === 0) return name.slice(pool.length + 1);
+    return name;
+  }
+
+  function snapNameOf(full) {
+    const at = full.indexOf('@');
+    return at >= 0 ? full.slice(at + 1) : full;
+  }
+
   async function fillPoolKids(pname) {
     const box = sidebarEl.querySelector(
       '.nav-kids[data-pool-kids-for="' + cssAttrEscape(pname) + '"]'
@@ -890,6 +913,18 @@
       const vols = datasets.filter(function (d) {
         return d.type === 'volume';
       });
+      const snaps = datasets.filter(function (d) {
+        return d.type === 'snapshot';
+      });
+      const snapsByFs = {};
+      snaps.forEach(function (s) {
+        const at = s.name.indexOf('@');
+        if (at < 0) return;
+        const parent = s.name.slice(0, at);
+        if (!snapsByFs[parent]) snapsByFs[parent] = [];
+        snapsByFs[parent].push(s);
+      });
+
       let html = '';
       diskLines.slice(0, 40).forEach(function (l) {
         html +=
@@ -899,17 +934,275 @@
           esc(shortDev(l.name)) +
           '</a>';
       });
-      fs.slice(0, 30).forEach(function (d) {
-        html += '<a href="' + esc(datasetHref(pname, d.name)) + '">' + esc(d.name) + '</a>';
+      fs.slice(0, 40).forEach(function (d) {
+        const kidSnaps = snapsByFs[d.name] || [];
+        const canMount = d.mountpoint && d.mountpoint.charAt(0) === '/';
+        const hasKids = kidSnaps.length > 0 || canMount;
+        const open = !!nav.dsOpen[d.name];
+        const isActive = activeRouteIsDataset(d.name);
+        if (!hasKids) {
+          html +=
+            '<a href="' +
+            esc(datasetHref(pname, d.name)) +
+            '"' +
+            (isActive ? ' class="active"' : '') +
+            '>' +
+            esc(shortDatasetLabel(d.name, pname)) +
+            '</a>';
+          return;
+        }
+        html +=
+          '<div class="nav-item-row">' +
+          '<button type="button" class="nav-twist" data-ds-kid="' +
+          esc(d.name) +
+          '">' +
+          (open ? '▾' : '▸') +
+          '</button>' +
+          '<a class="nav-item' +
+          (isActive ? ' active' : '') +
+          '" href="' +
+          esc(datasetHref(pname, d.name)) +
+          '" title="' +
+          esc(d.name) +
+          '">' +
+          esc(shortDatasetLabel(d.name, pname)) +
+          (kidSnaps.length
+            ? ' <span class="muted">(' + kidSnaps.length + ')</span>'
+            : '') +
+          '</a></div>';
+        if (open) {
+          html +=
+            '<div class="nav-kids" data-ds-kids-for="' +
+            esc(d.name) +
+            '" data-pool="' +
+            esc(pname) +
+            '" data-kind="filesystem" data-mount="' +
+            esc(canMount ? d.mountpoint : '') +
+            '"><span class="muted small">Loading…</span></div>';
+        }
       });
       vols.slice(0, 20).forEach(function (d) {
-        html += '<a href="' + esc(zvolHref(pname, d.name)) + '">zvol ' + esc(d.name) + '</a>';
+        const kidSnaps = snapsByFs[d.name] || [];
+        const open = !!nav.dsOpen[d.name];
+        if (!kidSnaps.length) {
+          html +=
+            '<a href="' +
+            esc(zvolHref(pname, d.name)) +
+            '">zvol ' +
+            esc(shortDatasetLabel(d.name, pname)) +
+            '</a>';
+          return;
+        }
+        html +=
+          '<div class="nav-item-row">' +
+          '<button type="button" class="nav-twist" data-ds-kid="' +
+          esc(d.name) +
+          '">' +
+          (open ? '▾' : '▸') +
+          '</button>' +
+          '<a class="nav-item" href="' +
+          esc(zvolHref(pname, d.name)) +
+          '" title="' +
+          esc(d.name) +
+          '">zvol ' +
+          esc(shortDatasetLabel(d.name, pname)) +
+          ' <span class="muted">(' +
+          kidSnaps.length +
+          ')</span></a></div>';
+        if (open) {
+          html +=
+            '<div class="nav-kids" data-ds-kids-for="' +
+            esc(d.name) +
+            '" data-pool="' +
+            esc(pname) +
+            '" data-kind="volume" data-mount=""><span class="muted small">Loading…</span></div>';
+        }
       });
       if (!html) html = '<span class="muted">Empty</span>';
       box.innerHTML = html;
+      wireSidebarClicks();
+      Object.keys(nav.dsOpen).forEach(function (dsName) {
+        if (!nav.dsOpen[dsName]) return;
+        if (poolOfDataset(dsName) !== pname) return;
+        if (dsName.indexOf('@') >= 0) return;
+        fillDatasetKids(dsName, pname, snapsByFs[dsName] || []);
+      });
     } catch (e) {
       box.innerHTML = '<span class="err">' + esc(e.message || e) + '</span>';
     }
+  }
+
+  function activeRouteIsDataset(name) {
+    const r = parseRoute();
+    return (r.kind === 'dataset' || r.kind === 'zvol') && r.parts[1] === name;
+  }
+
+  async function fillDatasetKids(dsName, pname, snapRows) {
+    const box = sidebarEl.querySelector(
+      '.nav-kids[data-ds-kids-for="' + cssAttrEscape(dsName) + '"]'
+    );
+    if (!box) return;
+    const mount = box.getAttribute('data-mount') || '';
+    const kind = box.getAttribute('data-kind') || '';
+    const isSnap = dsName.indexOf('@') >= 0 || kind === 'snapshot';
+    const isVol = kind === 'volume';
+
+    let html = '';
+    if (!isSnap && !isVol) {
+      const snaps = (snapRows || []).filter(function (s) {
+        return s.name.indexOf(dsName + '@') === 0;
+      });
+      snaps.slice(0, 50).forEach(function (s) {
+        const open = !!nav.dsOpen[s.name];
+        const active = activeRouteIsDataset(s.name);
+        html +=
+          '<div class="nav-item-row">' +
+          '<button type="button" class="nav-twist" data-ds-kid="' +
+          esc(s.name) +
+          '">' +
+          (open ? '▾' : '▸') +
+          '</button>' +
+          '<a class="nav-item' +
+          (active ? ' active' : '') +
+          '" href="' +
+          esc(datasetHref(pname, s.name)) +
+          '" title="' +
+          esc(s.name) +
+          '">' +
+          esc('@' + snapNameOf(s.name)) +
+          '</a></div>';
+        if (open) {
+          html +=
+            '<div class="nav-kids" data-ds-kids-for="' +
+            esc(s.name) +
+            '" data-pool="' +
+            esc(pname) +
+            '" data-kind="snapshot" data-mount="snap"><span class="muted small">Loading…</span></div>';
+        }
+      });
+    } else if (isVol) {
+      const snaps = (snapRows || []).filter(function (s) {
+        return s.name.indexOf(dsName + '@') === 0;
+      });
+      snaps.slice(0, 50).forEach(function (s) {
+        html +=
+          '<a href="' +
+          esc(datasetHref(pname, s.name)) +
+          '" title="' +
+          esc(s.name) +
+          '">' +
+          esc('@' + snapNameOf(s.name)) +
+          '</a>';
+      });
+      if (!snaps.length) html += '<span class="muted">No snapshots</span>';
+    }
+
+    if (!isVol && (isSnap || (mount && mount.charAt(0) === '/'))) {
+      html += await browseKidsHtml(dsName, '', pname);
+    } else if (!isSnap && !isVol && !html) {
+      html += '<span class="muted">No snapshots or mount</span>';
+    }
+
+    if (!html) html = '<span class="muted">Empty</span>';
+    box.innerHTML = html;
+    wireSidebarClicks();
+
+    if (!isSnap && !isVol) {
+      (snapRows || []).forEach(function (s) {
+        if (s.name.indexOf(dsName + '@') === 0 && nav.dsOpen[s.name]) {
+          fillDatasetKids(s.name, pname, []);
+        }
+      });
+    }
+    if (!isVol) {
+      refillOpenDirs(dsName, pname);
+    }
+  }
+
+  async function browseKidsHtml(dataset, path, pname) {
+    try {
+      const q =
+        '/v1/browse?dataset=' +
+        encSeg(dataset) +
+        (path ? '&path=' + encSeg(path) : '');
+      const res = await j(q);
+      const entries = res.entries || [];
+      if (!entries.length) {
+        return path === '' ? '<span class="muted">No files</span>' : '<span class="muted">Empty</span>';
+      }
+      let html = '';
+      entries.forEach(function (e) {
+        const childPath = path ? path + '/' + e.name : e.name;
+        if (e.type === 'dir') {
+          const key = browseStateKey(dataset, childPath);
+          const open = !!nav.dirOpen[key];
+          html +=
+            '<div class="nav-item-row">' +
+            '<button type="button" class="nav-twist" data-dir-kid-ds="' +
+            esc(dataset) +
+            '" data-dir-kid-path="' +
+            esc(childPath) +
+            '" data-dir-kid-pool="' +
+            esc(pname) +
+            '">' +
+            (open ? '▾' : '▸') +
+            '</button>' +
+            '<span class="nav-item nav-file" title="' +
+            esc(childPath) +
+            '">' +
+            esc(e.name) +
+            '/</span></div>';
+          if (open) {
+            html +=
+              '<div class="nav-kids" data-dir-kids-for="' +
+              esc(key) +
+              '"><span class="muted small">Loading…</span></div>';
+          }
+        } else {
+          const mark = e.type === 'symlink' ? ' →' : '';
+          html +=
+            '<span class="nav-file' +
+            (e.type !== 'file' ? ' muted' : '') +
+            '" title="' +
+            esc(e.type + (e.size != null ? ' · ' + e.size : '')) +
+            '">' +
+            esc(e.name) +
+            esc(mark) +
+            '</span>';
+        }
+      });
+      if (res.truncated) {
+        html += '<span class="muted">…truncated</span>';
+      }
+      return html;
+    } catch (err) {
+      return '<span class="muted" title="' + esc(err.message || err) + '">Unavailable</span>';
+    }
+  }
+
+  async function refillOpenDirs(dataset, pname) {
+    const prefix = dataset + '\t';
+    const keys = Object.keys(nav.dirOpen).filter(function (k) {
+      return nav.dirOpen[k] && k.indexOf(prefix) === 0;
+    });
+    keys.sort(function (a, b) {
+      return a.length - b.length;
+    });
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const path = key.slice(prefix.length);
+      await fillDirKids(dataset, path, pname);
+    }
+  }
+
+  async function fillDirKids(dataset, path, pname) {
+    const key = browseStateKey(dataset, path);
+    const box = sidebarEl.querySelector(
+      '.nav-kids[data-dir-kids-for="' + cssAttrEscape(key) + '"]'
+    );
+    if (!box) return;
+    box.innerHTML = await browseKidsHtml(dataset, path, pname);
+    wireSidebarClicks();
   }
 
   function wireSidebarClicks() {
@@ -940,6 +1233,26 @@
         e.stopPropagation();
         const dev = btn.getAttribute('data-disk-kid');
         nav.diskKids[dev] = !nav.diskKids[dev];
+        renderSidebar();
+      };
+    });
+    sidebarEl.querySelectorAll('[data-ds-kid]').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const name = btn.getAttribute('data-ds-kid');
+        nav.dsOpen[name] = !nav.dsOpen[name];
+        renderSidebar();
+      };
+    });
+    sidebarEl.querySelectorAll('[data-dir-kid-ds]').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const ds = btn.getAttribute('data-dir-kid-ds');
+        const path = btn.getAttribute('data-dir-kid-path') || '';
+        const key = browseStateKey(ds, path);
+        nav.dirOpen[key] = !nav.dirOpen[key];
         renderSidebar();
       };
     });

@@ -29,7 +29,7 @@ func writeClientErr(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, collector.ErrInvalidDevice) || errors.Is(err, zfsname.ErrInvalid) {
+	if errors.Is(err, collector.ErrInvalidDevice) || errors.Is(err, zfsname.ErrInvalid) || errors.Is(err, collector.ErrInvalidBrowse) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return true
 	}
@@ -156,6 +156,24 @@ func (s *Server) handleDatasetProps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"name": name, "properties": props, "source": src})
+}
+
+func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	ds := r.URL.Query().Get("dataset")
+	if ds == "" {
+		writeErr(w, http.StatusBadRequest, "dataset required")
+		return
+	}
+	path := r.URL.Query().Get("path")
+	res, err := collector.BrowseDir(r.Context(), ds, path)
+	if err != nil {
+		if writeClientErr(w, err) {
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
