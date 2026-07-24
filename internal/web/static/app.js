@@ -13,7 +13,8 @@
     poolKids: {},
     diskKids: {},
     dsOpen: {}, // filesystem or snapshot name → expanded
-    dirOpen: {}, // dataset + '\n' + relPath → expanded
+    dirOpen: {}, // dataset + '\t' + relPath → expanded
+    poolFilter: '',
     smart: {},
   };
 
@@ -750,6 +751,14 @@
       '</div>';
 
     html +=
+      '<div class="nav-pool-filter list-filter">' +
+      '<input type="search" class="list-filter-input" id="nav-pool-filter" placeholder="Filter…" autocomplete="off" spellcheck="false" value="' +
+      esc(nav.poolFilter || '') +
+      '" />' +
+      '<span class="list-filter-count" id="nav-pool-filter-count" hidden></span>' +
+      '</div>';
+
+    html +=
       '<div class="nav-section">' +
       '<button type="button" class="nav-section-head" data-toggle="pools">' +
       '<span class="nav-chevron">' +
@@ -758,7 +767,7 @@
       pools.length +
       ')</span></button>';
     if (nav.poolsOpen) {
-      html += '<div class="nav-section-body">';
+      html += '<div class="nav-section-body" id="nav-pools-body">';
       if (!pools.length) {
         html += '<div class="nav-empty">No pools</div>';
       } else {
@@ -766,6 +775,9 @@
           const open = !!nav.poolKids[p.name];
           const isActive = active.type === 'pool' && active.id === p.name;
           html +=
+            '<div class="nav-pool-entry" data-pool-name="' +
+            esc(p.name) +
+            '">' +
             '<div class="nav-item-row">' +
             '<button type="button" class="nav-twist" data-pool-kid="' +
             esc(p.name) +
@@ -784,9 +796,12 @@
             esc(p.health) +
             '</span></a></div>';
           if (open) {
-            html += '<div class="nav-kids" data-pool-kids-for="' + esc(p.name) + '">';
-            html += '<span class="muted small">Loading…</span></div>';
+            html +=
+              '<div class="nav-kids" data-pool-kids-for="' +
+              esc(p.name) +
+              '"><span class="muted small">Loading…</span></div>';
           }
+          html += '</div>';
         });
       }
       html += '</div>';
@@ -815,6 +830,9 @@
             })
             .join(', ');
           html +=
+            '<div class="nav-disk-entry" data-disk-name="' +
+            esc(shortDev(d.device) + ' ' + d.device + ' ' + poolNames) +
+            '">' +
             '<div class="nav-item-row">' +
             '<button type="button" class="nav-twist" data-disk-kid="' +
             esc(d.device) +
@@ -849,6 +867,7 @@
             html +=
               '<a href="' + esc(diskHref(d.device)) + '">Full SMART →</a></div>';
           }
+          html += '</div>';
         });
       }
       html += '</div>';
@@ -857,6 +876,8 @@
 
     sidebarEl.innerHTML = html;
     wireSidebarClicks();
+    wireNavPoolFilter();
+    applyNavPoolFilter();
 
     // Lazy-fill pool kids and disk SMART
     Object.keys(nav.poolKids).forEach(function (pname) {
@@ -873,6 +894,110 @@
           box.innerHTML = smartSnippetHtml(nav.smart[dev].data);
         }
       });
+    });
+  }
+
+  function applyNavPoolFilter() {
+    const q = String(nav.poolFilter || '')
+      .trim()
+      .toLowerCase();
+    let total = 0;
+    let shown = 0;
+
+    function rowLabel(row) {
+      const link = row.querySelector('.nav-item');
+      return ((link && link.textContent) || row.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Returns true if any visible match under kidsEl. forceShow = ancestor matched. */
+    function filterKids(kidsEl, forceShow) {
+      if (!kidsEl) return false;
+      let any = false;
+      const children = Array.prototype.slice.call(kidsEl.children);
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (el.classList.contains('nav-item-row')) {
+          total++;
+          const next = children[i + 1];
+          const sub = next && next.classList.contains('nav-kids') ? next : null;
+          const selfMatch =
+            forceShow || !q || rowLabel(el).toLowerCase().indexOf(q) >= 0;
+          const childMatch = filterKids(sub, selfMatch);
+          const show = !q || selfMatch || childMatch;
+          el.hidden = !show;
+          if (sub) {
+            sub.hidden = !show;
+            i++;
+          }
+          if (show) {
+            shown++;
+            any = true;
+          }
+        } else if (el.tagName === 'A' || el.classList.contains('nav-file')) {
+          total++;
+          const selfMatch =
+            forceShow || !q || (el.textContent || '').toLowerCase().indexOf(q) >= 0;
+          const show = !q || selfMatch;
+          el.hidden = !show;
+          if (show) {
+            shown++;
+            any = true;
+          }
+        } else if (
+          el.classList.contains('muted') ||
+          el.classList.contains('err') ||
+          el.classList.contains('smart-snip')
+        ) {
+          // Status / loading lines: hide while filtering unless forcing a branch
+          el.hidden = !!q && !forceShow;
+        }
+      }
+      return any;
+    }
+
+    function filterTopEntry(entry, nameAttr) {
+      total++;
+      let row = null;
+      let kids = null;
+      Array.prototype.forEach.call(entry.children, function (c) {
+        if (c.classList.contains('nav-item-row')) row = c;
+        else if (c.classList.contains('nav-kids')) kids = c;
+      });
+      const name = (entry.getAttribute(nameAttr) || (row && rowLabel(row)) || '').toLowerCase();
+      const selfMatch = !q || name.indexOf(q) >= 0;
+      const childMatch = filterKids(kids, selfMatch);
+      const show = !q || selfMatch || childMatch;
+      entry.hidden = !show;
+      if (row) row.hidden = false; // entry hide covers the row
+      if (show) shown++;
+    }
+
+    Array.prototype.forEach.call(sidebarEl.querySelectorAll('.nav-pool-entry'), function (entry) {
+      filterTopEntry(entry, 'data-pool-name');
+    });
+    Array.prototype.forEach.call(sidebarEl.querySelectorAll('.nav-disk-entry'), function (entry) {
+      filterTopEntry(entry, 'data-disk-name');
+    });
+
+    const countEl = sidebarEl.querySelector('#nav-pool-filter-count');
+    if (countEl) {
+      if (q && total > 0) {
+        countEl.hidden = false;
+        countEl.textContent = shown + '/' + total;
+      } else {
+        countEl.hidden = true;
+        countEl.textContent = '';
+      }
+    }
+  }
+
+  function wireNavPoolFilter() {
+    const input = sidebarEl.querySelector('#nav-pool-filter');
+    if (!input || input.dataset.wired === '1') return;
+    input.dataset.wired = '1';
+    input.addEventListener('input', function () {
+      nav.poolFilter = input.value;
+      applyNavPoolFilter();
     });
   }
 
@@ -1027,6 +1152,7 @@
         if (dsName.indexOf('@') >= 0) return;
         fillDatasetKids(dsName, pname, snapsByFs[dsName] || []);
       });
+      applyNavPoolFilter();
     } catch (e) {
       box.innerHTML = '<span class="err">' + esc(e.message || e) + '</span>';
     }
@@ -1115,7 +1241,11 @@
       });
     }
     if (!isVol) {
-      refillOpenDirs(dsName, pname);
+      refillOpenDirs(dsName, pname).then(function () {
+        applyNavPoolFilter();
+      });
+    } else {
+      applyNavPoolFilter();
     }
   }
 
@@ -1203,6 +1333,7 @@
     if (!box) return;
     box.innerHTML = await browseKidsHtml(dataset, path, pname);
     wireSidebarClicks();
+    applyNavPoolFilter();
   }
 
   function wireSidebarClicks() {
