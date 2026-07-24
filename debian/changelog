@@ -1,3 +1,13 @@
+zfstool (0.2.4-1) unstable; urgency=medium
+
+  * Split main view: browse pane (datasets/snapshots/files) beside ZFS detail.
+  * Sidebar: nest snapshots and optional file trees; filter and Files toggle.
+  * Resizable left nav width; wider default sidebar.
+  * Format byte/date ZFS properties; do not truncate browse directory listings.
+
+ -- nixomose <nixomose@gmail.com>  Fri, 24 Jul 2026 09:32:28 +0000
+
+
 zfstool (0.2.3-1) unstable; urgency=medium
 
   * Rename CLI command agent to server (agent remains an alias).

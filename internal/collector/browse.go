@@ -16,8 +16,6 @@ import (
 // ErrInvalidBrowse is returned when a browse path escapes the dataset root or is malformed.
 var ErrInvalidBrowse = errors.New("invalid browse path")
 
-const browseMaxEntries = 200
-
 // BrowseDir lists files and directories under a dataset or snapshot mount, confined to that root.
 // dataset is a filesystem (pool/fs) or snapshot (pool/fs@snap). relPath is relative to that root ("" = root).
 func BrowseDir(ctx context.Context, dataset, relPath string) (*api.BrowseResult, error) {
@@ -90,10 +88,6 @@ func BrowseDir(ctx context.Context, dataset, relPath string) (*api.BrowseResult,
 		}
 		return list[i].name < list[j].name
 	})
-	if len(list) > browseMaxEntries {
-		out.Truncated = true
-		list = list[:browseMaxEntries]
-	}
 	out.Entries = make([]api.BrowseEntry, len(list))
 	for i := range list {
 		out.Entries[i] = list[i].e

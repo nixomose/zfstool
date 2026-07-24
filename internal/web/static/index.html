@@ -23,7 +23,7 @@
       --heading: #f0ede6;
       --err: #c97a7a;
       --health-ok: #8faa8a;
-      --sidebar-w: 272px;
+      --sidebar-w: 320px;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -50,6 +50,39 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+    .sidebar-resizer {
+      flex: 0 0 5px;
+      width: 5px;
+      margin-left: -1px;
+      cursor: col-resize;
+      background: transparent;
+      position: relative;
+      z-index: 4;
+      touch-action: none;
+    }
+    .sidebar-resizer::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 1px;
+      width: 1px;
+      background: var(--border);
+    }
+    .sidebar-resizer:hover::after,
+    .shell.is-resizing-sidebar .sidebar-resizer::after {
+      background: var(--accent);
+      width: 2px;
+      left: 0.5px;
+    }
+    .shell.is-resizing-sidebar {
+      cursor: col-resize;
+      user-select: none;
+    }
+    .shell.is-resizing-sidebar iframe,
+    .shell.is-resizing-sidebar * {
+      cursor: col-resize !important;
     }
     .sidebar-brand {
       padding: 0.55rem 0.7rem 0.45rem;
@@ -188,12 +221,35 @@
     }
     .nav-pool-filter {
       margin: 0.35rem 0.5rem 0.15rem;
+      gap: 0.35rem;
     }
     .nav-pool-filter input[type="search"] {
       max-width: none;
-      width: 100%;
+      flex: 1 1 auto;
+      min-width: 0;
+      width: auto;
       font-size: 0.72rem;
       padding: 0.2rem 0.4rem;
+    }
+    .nav-files-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.22rem;
+      flex: 0 0 auto;
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .nav-files-toggle input {
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .nav-files-toggle:hover { color: var(--text); }
+    .nav-pool-filter .list-filter-count {
+      flex: 0 0 auto;
     }
     .nav-pool-entry[hidden],
     .nav-disk-entry[hidden] {
@@ -274,6 +330,111 @@
       flex: 1;
       overflow: auto;
       padding: 0.65rem 0.85rem 1.5rem;
+    }
+    #app.has-split {
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .split-view {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+    }
+    .browse-pane {
+      width: var(--browse-pane-w, 300px);
+      flex-shrink: 0;
+      overflow: auto;
+      border-right: 1px solid var(--border);
+      background: var(--bg-elevated);
+      padding: 0.45rem 0.4rem 0.75rem;
+    }
+    .browse-pane .browse-title {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding: 0.15rem 0.35rem 0.35rem;
+    }
+    .browse-pane .browse-crumbs {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      padding: 0 0.35rem 0.4rem;
+      word-break: break-all;
+    }
+    .browse-pane .browse-crumbs a { color: var(--link); }
+    .browse-pane .browse-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .browse-pane .browse-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.22rem 0.35rem;
+      border-radius: 2px;
+      color: var(--text);
+      font-size: 0.78rem;
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .browse-pane .browse-item:hover {
+      background: var(--surface-hover);
+      color: var(--heading);
+      text-decoration: none;
+    }
+    .browse-pane .browse-item.active {
+      background: var(--surface);
+      color: var(--heading);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+    .browse-pane .browse-item .browse-kind {
+      flex-shrink: 0;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      min-width: 2.2rem;
+    }
+    .browse-pane .browse-item .browse-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .browse-pane .browse-section {
+      margin-top: 0.45rem;
+      padding: 0.2rem 0.35rem 0.1rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .browse-pane .browse-empty {
+      padding: 0.35rem;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+    }
+    .detail-pane {
+      flex: 1;
+      min-width: 0;
+      overflow: auto;
+      padding: 0.65rem 0.85rem 1.5rem;
+    }
+    @media (max-width: 900px) {
+      .split-view { flex-direction: column; }
+      .browse-pane {
+        width: 100%;
+        max-height: 38vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
     }
     h2.page-title {
       margin: 0 0 0.45rem;
@@ -518,6 +679,7 @@
         border-right: 0;
         border-bottom: 1px solid var(--border);
       }
+      .sidebar-resizer { display: none; }
       .main-col { overflow: visible; }
       #app { overflow: visible; }
     }
@@ -534,6 +696,14 @@
         <p class="nav-empty">Loading…</p>
       </div>
     </aside>
+    <div
+      class="sidebar-resizer"
+      id="sidebar-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize navigation"
+      tabindex="0"
+    ></div>
     <div class="main-col">
       <div class="topbar">
         <div class="topbar-meta" id="topbar-meta">Read-only ZFS inventory</div>

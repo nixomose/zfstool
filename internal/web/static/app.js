@@ -15,6 +15,7 @@
     dsOpen: {}, // filesystem or snapshot name → expanded
     dirOpen: {}, // dataset + '\t' + relPath → expanded
     poolFilter: '',
+    includeFiles: loadIncludeFiles(),
     smart: {},
   };
 
@@ -22,6 +23,22 @@
   let disksCache = null;
   let hostCache = null;
   let sidebarBuiltFor = '';
+
+  function loadIncludeFiles() {
+    try {
+      const v = localStorage.getItem('zfstool.nav.includeFiles');
+      if (v === null) return true;
+      return v === '1' || v === 'true';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function saveIncludeFiles(on) {
+    try {
+      localStorage.setItem('zfstool.nav.includeFiles', on ? '1' : '0');
+    } catch (_) {}
+  }
 
   function esc(s) {
     if (s == null || s === undefined) return '';
@@ -280,12 +297,324 @@
     return '#/pool/' + encSeg(pool) + '/vdev/' + String(idx);
   }
 
-  function datasetHref(pool, name) {
-    return '#/pool/' + encSeg(pool) + '/dataset/' + encSeg(name);
+  function datasetHref(pool, name, opts) {
+    var h = '#/pool/' + encSeg(pool) + '/dataset/' + encSeg(name);
+    var q = [];
+    if (opts && opts.path) q.push('path=' + encSeg(opts.path));
+    if (opts && opts.file) q.push('file=' + encSeg(opts.file));
+    if (opts && opts.tab) q.push('tab=' + encSeg(opts.tab));
+    if (q.length) h += '?' + q.join('&');
+    return h;
   }
 
   function zvolHref(pool, name) {
     return '#/pool/' + encSeg(pool) + '/zvol/' + encSeg(name);
+  }
+
+  function browseParentPath(path) {
+    const p = String(path || '').replace(/^\/+|\/+$/g, '');
+    if (!p) return '';
+    const i = p.lastIndexOf('/');
+    return i < 0 ? '' : p.slice(0, i);
+  }
+
+  function joinBrowsePath(base, name) {
+    const b = String(base || '').replace(/^\/+|\/+$/g, '');
+    const n = String(name || '');
+    return b ? b + '/' + n : n;
+  }
+
+  /** Prepare #app as browse | detail split; returns { browse, detail }. */
+  function mountSplitView() {
+    appEl.classList.add('has-split');
+    appEl.innerHTML =
+      '<div class="split-view">' +
+      '<aside class="browse-pane" id="browse-pane" aria-label="Snapshots and files">' +
+      '<p class="browse-empty">Loading…</p></aside>' +
+      '<div class="detail-pane" id="detail-pane"><p class="loading">Loading…</p></div>' +
+      '</div>';
+    return {
+      browse: document.getElementById('browse-pane'),
+      detail: document.getElementById('detail-pane'),
+    };
+  }
+
+  function clearSplitView() {
+    appEl.classList.remove('has-split');
+  }
+
+  function browseItemHtml(href, kind, name, active) {
+    return (
+      '<a class="browse-item' +
+      (active ? ' active' : '') +
+      '" href="' +
+      esc(href) +
+      '" title="' +
+      esc(name) +
+      '"><span class="browse-kind">' +
+      esc(kind) +
+      '</span><span class="browse-name">' +
+      esc(name) +
+      '</span></a>'
+    );
+  }
+
+  async function fillBrowsePane(pane, opts) {
+    if (!pane) return;
+    const pool = opts.pool;
+    const dataset = opts.dataset || '';
+    const path = opts.path || '';
+    const file = opts.file || '';
+    const isSnap = dataset.indexOf('@') >= 0;
+    const isVol = opts.kind === 'zvol' || opts.kind === 'volume';
+
+    try {
+      let html = '<div class="browse-title">Browser</div>';
+
+      if (!dataset) {
+        html += '<div class="browse-crumbs">' + esc(pool) + '</div><div class="browse-list">';
+        const rows = await j('/v1/datasets?pool=' + encSeg(pool));
+        const fs = rows.filter(function (d) {
+          return d.type === 'filesystem';
+        });
+        const vols = rows.filter(function (d) {
+          return d.type === 'volume';
+        });
+        const snaps = rows.filter(function (d) {
+          return d.type === 'snapshot';
+        });
+        if (fs.length) {
+          html += '<div class="browse-section">Datasets</div>';
+          fs.slice(0, 80).forEach(function (d) {
+            html += browseItemHtml(
+              datasetHref(pool, d.name),
+              'ds',
+              shortDatasetLabel(d.name, pool),
+              false
+            );
+          });
+        }
+        if (vols.length) {
+          html += '<div class="browse-section">Volumes</div>';
+          vols.slice(0, 40).forEach(function (d) {
+            html += browseItemHtml(
+              zvolHref(pool, d.name),
+              'vol',
+              shortDatasetLabel(d.name, pool),
+              false
+            );
+          });
+        }
+        if (snaps.length) {
+          html += '<div class="browse-section">Snapshots</div>';
+          snaps.slice(0, 60).forEach(function (d) {
+            html += browseItemHtml(datasetHref(pool, d.name), 'snap', d.name, false);
+          });
+        }
+        // Pool root filesystem files
+        const root = rows.find(function (d) {
+          return d.type === 'filesystem' && d.name === pool;
+        });
+        if (root && root.mountpoint && root.mountpoint.charAt(0) === '/') {
+          html += await browseEntriesSection(pool, pool, '', '', 'Files');
+        }
+        if (!fs.length && !vols.length && !snaps.length) {
+          html += '<div class="browse-empty">No datasets</div>';
+        }
+        html += '</div>';
+      } else {
+        const crumbs = [
+          '<a href="' + esc(poolHref(pool)) + '">' + esc(pool) + '</a>',
+          '<a href="' + esc(isVol ? zvolHref(pool, dataset) : datasetHref(pool, dataset)) + '">' +
+            esc(shortDatasetLabel(dataset, pool)) +
+            '</a>',
+        ];
+        if (path) {
+          const parts = path.split('/');
+          let acc = '';
+          parts.forEach(function (part, i) {
+            acc = joinBrowsePath(acc, part);
+            const isLast = i === parts.length - 1 && !file;
+            if (isLast) {
+              crumbs.push('<span>' + esc(part) + '</span>');
+            } else {
+              crumbs.push(
+                '<a href="' +
+                  esc(datasetHref(pool, dataset, { path: acc })) +
+                  '">' +
+                  esc(part) +
+                  '</a>'
+              );
+            }
+          });
+        }
+        if (file) crumbs.push('<span>' + esc(file) + '</span>');
+        html +=
+          '<div class="browse-crumbs">' +
+          crumbs.join(' <span class="crumb-sep">›</span> ') +
+          '</div><div class="browse-list">';
+
+        if (!isSnap && !isVol && !path && !file) {
+          const rows = await j('/v1/datasets?pool=' + encSeg(pool));
+          const snaps = rows.filter(function (d) {
+            return d.type === 'snapshot' && d.name.indexOf(dataset + '@') === 0;
+          });
+          if (snaps.length) {
+            html += '<div class="browse-section">Snapshots</div>';
+            snaps.slice(0, 80).forEach(function (d) {
+              html += browseItemHtml(
+                datasetHref(pool, d.name),
+                'snap',
+                '@' + snapNameOf(d.name),
+                false
+              );
+            });
+          }
+        }
+
+        if (!isVol) {
+          html += await browseEntriesSection(pool, dataset, path, file, path || isSnap ? 'Contents' : 'Files');
+        } else if (isVol && !path) {
+          const rows = await j('/v1/datasets?pool=' + encSeg(pool));
+          const snaps = rows.filter(function (d) {
+            return d.type === 'snapshot' && d.name.indexOf(dataset + '@') === 0;
+          });
+          html += '<div class="browse-section">Snapshots</div>';
+          if (snaps.length) {
+            snaps.slice(0, 80).forEach(function (d) {
+              html += browseItemHtml(
+                datasetHref(pool, d.name),
+                'snap',
+                '@' + snapNameOf(d.name),
+                false
+              );
+            });
+          } else {
+            html += '<div class="browse-empty">No snapshots</div>';
+          }
+        }
+
+        html += '</div>';
+      }
+
+      pane.innerHTML = html;
+    } catch (e) {
+      pane.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+    }
+  }
+
+  async function browseEntriesSection(pool, dataset, path, selectedFile, sectionLabel) {
+    try {
+      const q =
+        '/v1/browse?dataset=' +
+        encSeg(dataset) +
+        (path ? '&path=' + encSeg(path) : '');
+      const res = await j(q);
+      const entries = res.entries || [];
+      let html = '<div class="browse-section">' + esc(sectionLabel || 'Contents') + '</div>';
+      if (path) {
+        const parent = browseParentPath(path);
+        html += browseItemHtml(
+          datasetHref(pool, dataset, parent ? { path: parent } : {}),
+          'up',
+          '..',
+          false
+        );
+      }
+      if (!entries.length) {
+        html += '<div class="browse-empty">Empty</div>';
+        return html;
+      }
+      entries.forEach(function (e) {
+        if (e.type === 'dir') {
+          const child = joinBrowsePath(path, e.name);
+          html += browseItemHtml(
+            datasetHref(pool, dataset, { path: child }),
+            'dir',
+            e.name + '/',
+            false
+          );
+        } else {
+          const active = selectedFile === e.name;
+          html += browseItemHtml(
+            datasetHref(pool, dataset, { path: path || undefined, file: e.name }),
+            e.type === 'symlink' ? 'link' : 'file',
+            e.name,
+            active
+          );
+        }
+      });
+      if (res.truncated) html += '<div class="browse-empty">…truncated</div>';
+      return html;
+    } catch (err) {
+      return (
+        '<div class="browse-section">' +
+        esc(sectionLabel || 'Contents') +
+        '</div><div class="browse-empty" title="' +
+        esc(err.message || err) +
+        '">Unavailable</div>'
+      );
+    }
+  }
+
+  async function renderFileDetail(detailEl, pool, dataset, path, fileName) {
+    const parentPath = path || '';
+    let entry = null;
+    try {
+      const res = await j(
+        '/v1/browse?dataset=' +
+          encSeg(dataset) +
+          (parentPath ? '&path=' + encSeg(parentPath) : '')
+      );
+      entry = (res.entries || []).find(function (e) {
+        return e.name === fileName;
+      });
+    } catch (_) {}
+
+    const full = joinBrowsePath(parentPath, fileName);
+    detailEl.innerHTML =
+      '<h2 class="page-title">' +
+      esc(fileName) +
+      '</h2>' +
+      '<div class="panel"><div class="stat-row">' +
+      '<span><span class="k">Pool</span>' +
+      poolLink(pool) +
+      '</span>' +
+      '<span><span class="k">Dataset</span>' +
+      dsLink(dataset) +
+      '</span>' +
+      '<span><span class="k">Path</span><span class="mono">' +
+      esc(full || fileName) +
+      '</span></span>' +
+      '</div></div>' +
+      '<div class="panel">' +
+      renderKV(
+        [
+          ['Name', fileName],
+          ['Type', (entry && entry.type) || 'file'],
+          [
+            'Size',
+            entry && entry.size != null
+              ? fmtIntCommas(entry.size) +
+                ' <span class="muted">(' +
+                fmtBytes(entry.size) +
+                ')</span>'
+              : '—',
+          ],
+          [
+            'Parent',
+            parentPath
+              ? '<a href="' +
+                esc(datasetHref(pool, dataset, { path: parentPath })) +
+                '">' +
+                esc(parentPath) +
+                '</a>'
+              : '<a href="' + esc(datasetHref(pool, dataset)) + '">' + esc(dataset) + '</a>',
+          ],
+        ],
+        true
+      ) +
+      '</div>';
   }
 
   function dsLink(name, typeHint) {
@@ -755,6 +1084,11 @@
       '<input type="search" class="list-filter-input" id="nav-pool-filter" placeholder="Filter…" autocomplete="off" spellcheck="false" value="' +
       esc(nav.poolFilter || '') +
       '" />' +
+      '<label class="nav-files-toggle" title="Show files and directories under datasets and snapshots">' +
+      '<input type="checkbox" id="nav-include-files"' +
+      (nav.includeFiles ? ' checked' : '') +
+      ' />' +
+      '<span>Files</span></label>' +
       '<span class="list-filter-count" id="nav-pool-filter-count" hidden></span>' +
       '</div>';
 
@@ -877,6 +1211,7 @@
     sidebarEl.innerHTML = html;
     wireSidebarClicks();
     wireNavPoolFilter();
+    wireNavIncludeFiles();
     applyNavPoolFilter();
 
     // Lazy-fill pool kids and disk SMART
@@ -1001,6 +1336,22 @@
     });
   }
 
+  function wireNavIncludeFiles() {
+    const cb = sidebarEl.querySelector('#nav-include-files');
+    if (!cb || cb.dataset.wired === '1') return;
+    cb.dataset.wired = '1';
+    cb.addEventListener('change', function () {
+      nav.includeFiles = !!cb.checked;
+      saveIncludeFiles(nav.includeFiles);
+      if (!nav.includeFiles) {
+        // Drop open directory expansions; snapshots stay.
+        nav.dirOpen = {};
+      }
+      sidebarBuiltFor = '';
+      renderSidebar();
+    });
+  }
+
   function browseStateKey(dataset, path) {
     return dataset + '\t' + (path || '');
   }
@@ -1062,7 +1413,7 @@
       fs.slice(0, 40).forEach(function (d) {
         const kidSnaps = snapsByFs[d.name] || [];
         const canMount = d.mountpoint && d.mountpoint.charAt(0) === '/';
-        const hasKids = kidSnaps.length > 0 || canMount;
+        const hasKids = kidSnaps.length > 0 || (nav.includeFiles && canMount);
         const open = !!nav.dsOpen[d.name];
         const isActive = activeRouteIsDataset(d.name);
         if (!hasKids) {
@@ -1181,6 +1532,19 @@
       snaps.slice(0, 50).forEach(function (s) {
         const open = !!nav.dsOpen[s.name];
         const active = activeRouteIsDataset(s.name);
+        if (!nav.includeFiles) {
+          html +=
+            '<a href="' +
+            esc(datasetHref(pname, s.name)) +
+            '"' +
+            (active ? ' class="active"' : '') +
+            ' title="' +
+            esc(s.name) +
+            '">' +
+            esc('@' + snapNameOf(s.name)) +
+            '</a>';
+          return;
+        }
         html +=
           '<div class="nav-item-row">' +
           '<button type="button" class="nav-twist" data-ds-kid="' +
@@ -1223,10 +1587,10 @@
       if (!snaps.length) html += '<span class="muted">No snapshots</span>';
     }
 
-    if (!isVol && (isSnap || (mount && mount.charAt(0) === '/'))) {
+    if (!isVol && nav.includeFiles && (isSnap || (mount && mount.charAt(0) === '/'))) {
       html += await browseKidsHtml(dsName, '', pname);
     } else if (!isSnap && !isVol && !html) {
-      html += '<span class="muted">No snapshots or mount</span>';
+      html += '<span class="muted">No snapshots' + (nav.includeFiles ? ' or mount' : '') + '</span>';
     }
 
     if (!html) html = '<span class="muted">Empty</span>';
@@ -1240,7 +1604,7 @@
         }
       });
     }
-    if (!isVol) {
+    if (!isVol && nav.includeFiles) {
       refillOpenDirs(dsName, pname).then(function () {
         applyNavPoolFilter();
       });
@@ -1250,6 +1614,7 @@
   }
 
   async function browseKidsHtml(dataset, path, pname) {
+    if (!nav.includeFiles) return '';
     try {
       const q =
         '/v1/browse?dataset=' +
@@ -1277,11 +1642,13 @@
             '">' +
             (open ? '▾' : '▸') +
             '</button>' +
-            '<span class="nav-item nav-file" title="' +
+            '<a class="nav-item nav-file" href="' +
+            esc(datasetHref(pname, dataset, { path: childPath })) +
+            '" title="' +
             esc(childPath) +
             '">' +
             esc(e.name) +
-            '/</span></div>';
+            '/</a></div>';
           if (open) {
             html +=
               '<div class="nav-kids" data-dir-kids-for="' +
@@ -1290,15 +1657,18 @@
           }
         } else {
           const mark = e.type === 'symlink' ? ' →' : '';
+          const parentPath = path || undefined;
           html +=
-            '<span class="nav-file' +
+            '<a class="nav-file' +
             (e.type !== 'file' ? ' muted' : '') +
+            '" href="' +
+            esc(datasetHref(pname, dataset, { path: parentPath, file: e.name })) +
             '" title="' +
             esc(e.type + (e.size != null ? ' · ' + e.size : '')) +
             '">' +
             esc(e.name) +
             esc(mark) +
-            '</span>';
+            '</a>';
         }
       });
       if (res.truncated) {
@@ -1718,7 +2088,10 @@
       { label: 'Overview', hash: '/' },
       { label: poolName, hash: null },
     ]);
-    appEl.innerHTML = '<p class="loading">Loading pool…</p>';
+    const panes = mountSplitView();
+    const detailEl = panes.detail;
+    fillBrowsePane(panes.browse, { pool: poolName });
+    detailEl.innerHTML = '<p class="loading">Loading pool…</p>';
     try {
       const base = '/v1/pools/' + encSeg(poolName);
       const needs = {
@@ -2047,7 +2420,7 @@
         }
       }
 
-      appEl.innerHTML =
+      detailEl.innerHTML =
         '<h2 class="page-title">' +
         esc(poolName) +
         '</h2>' +
@@ -2130,7 +2503,7 @@
         }
       }
     } catch (e) {
-      appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+      detailEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
   }
 
@@ -2284,13 +2657,44 @@
   }
 
   async function renderDatasetLike(kind, poolName, dsName) {
-    const label = kind === 'zvol' ? 'Zvol' : 'Dataset';
+    const q = parseRoute().query || {};
+    const browsePath = q.path || '';
+    const browseFile = q.file || '';
+
     renderBreadcrumbs([
       { label: 'Overview', hash: '/' },
       { label: poolName, hash: '/pool/' + encSeg(poolName) },
-      { label: dsName, hash: null },
-    ]);
-    appEl.innerHTML = '<p class="loading">Loading…</p>';
+      {
+        label: dsName,
+        hash:
+          browsePath || browseFile
+            ? '/pool/' + encSeg(poolName) + '/dataset/' + encSeg(dsName)
+            : null,
+      },
+    ].concat(
+      browsePath
+        ? [{ label: browsePath + (browseFile ? '/' + browseFile : ''), hash: null }]
+        : browseFile
+          ? [{ label: browseFile, hash: null }]
+          : []
+    ));
+
+    const panes = mountSplitView();
+    const detailEl = panes.detail;
+    fillBrowsePane(panes.browse, {
+      pool: poolName,
+      dataset: dsName,
+      path: browsePath,
+      file: browseFile,
+      kind: kind,
+    });
+
+    if (browseFile) {
+      await renderFileDetail(detailEl, poolName, dsName, browsePath, browseFile);
+      return;
+    }
+
+    detailEl.innerHTML = '<p class="loading">Loading…</p>';
     try {
       const data = await j('/v1/datasets/properties?name=' + encSeg(dsName));
       const props = data.properties || {};
@@ -2376,10 +2780,17 @@
 
       const parentFs = dsName.indexOf('@') >= 0 ? dsName.split('@')[0] : dsName.replace(/\/[^/]+$/, '');
 
-      appEl.innerHTML =
+      const pathNote = browsePath
+        ? '<p class="muted small">Browsing <span class="mono">' +
+          esc(browsePath) +
+          '</span> — dataset properties below.</p>'
+        : '';
+
+      detailEl.innerHTML =
         '<h2 class="page-title">' +
         esc(dsName) +
         '</h2>' +
+        pathNote +
         '<div class="panel"><div class="stat-row">' +
         '<span><span class="k">Pool</span>' +
         poolLink(poolName) +
@@ -2398,28 +2809,33 @@
         holdsBlock +
         allowBlock;
     } catch (e) {
-      appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+      detailEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
   }
 
   async function navigateRoute(r) {
     switch (r.kind) {
       case 'home':
+        clearSplitView();
         await renderHome();
         break;
       case 'host':
+        clearSplitView();
         await renderHost();
         break;
       case 'remote':
+        clearSplitView();
         await renderRemote();
         break;
       case 'pool':
         await renderPool(r.parts[0]);
         break;
       case 'vdev':
+        clearSplitView();
         await renderVdev(r.parts[0], r.parts[1]);
         break;
       case 'disk':
+        clearSplitView();
         await renderDisk(r.parts[0]);
         break;
       case 'dataset':
@@ -2429,9 +2845,11 @@
         await renderDatasetLike('zvol', r.parts[0], r.parts[1]);
         break;
       default:
+        clearSplitView();
         await renderHome();
     }
-    enhanceFilterableLists(appEl);
+    const filterRoot = document.getElementById('detail-pane') || appEl;
+    enhanceFilterableLists(filterRoot);
     await renderSidebar();
     await updateConnectionChrome();
   }
@@ -2481,6 +2899,103 @@
 
   window.addEventListener('hashchange', dispatch);
   dispatch();
+
+  (function initSidebarResize() {
+    const shell = document.querySelector('.shell');
+    const resizer = document.getElementById('sidebar-resizer');
+    if (!shell || !resizer) return;
+
+    const MIN_W = 180;
+    const MAX_W = 640;
+    const DEFAULT_W = 320;
+
+    function clamp(w) {
+      const max = Math.min(MAX_W, Math.floor(window.innerWidth * 0.55));
+      return Math.max(MIN_W, Math.min(max, Math.round(w)));
+    }
+
+    function applyWidth(w) {
+      document.documentElement.style.setProperty('--sidebar-w', clamp(w) + 'px');
+    }
+
+    function loadWidth() {
+      try {
+        const v = parseInt(localStorage.getItem('zfstool.sidebarWidth'), 10);
+        if (isFinite(v) && v > 0) return clamp(v);
+      } catch (_) {}
+      return DEFAULT_W;
+    }
+
+    function saveWidth(w) {
+      try {
+        localStorage.setItem('zfstool.sidebarWidth', String(clamp(w)));
+      } catch (_) {}
+    }
+
+    applyWidth(loadWidth());
+
+    let dragging = false;
+    let startX = 0;
+    let startW = 0;
+
+    function onMove(e) {
+      if (!dragging) return;
+      const x = e.clientX != null ? e.clientX : e.touches && e.touches[0] && e.touches[0].clientX;
+      if (x == null) return;
+      applyWidth(startW + (x - startX));
+    }
+
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      shell.classList.remove('is-resizing-sidebar');
+      const cur = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'),
+        10
+      );
+      if (isFinite(cur)) saveWidth(cur);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    }
+
+    resizer.addEventListener('pointerdown', function (e) {
+      if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) return;
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'),
+        10
+      );
+      if (!isFinite(startW)) startW = DEFAULT_W;
+      shell.classList.add('is-resizing-sidebar');
+      try {
+        resizer.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
+
+    resizer.addEventListener('keydown', function (e) {
+      const step = e.shiftKey ? 32 : 16;
+      let w = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'),
+        10
+      );
+      if (!isFinite(w)) w = DEFAULT_W;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        applyWidth(w - step);
+        saveWidth(w - step);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        applyWidth(w + step);
+        saveWidth(w + step);
+      }
+    });
+  })();
 
   document.addEventListener(
     'keydown',
