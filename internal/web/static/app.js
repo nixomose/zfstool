@@ -478,6 +478,30 @@
     );
   }
 
+  function attachBrowseFilter(pane) {
+    if (!pane) return;
+    const list = pane.querySelector('.browse-list');
+    if (!list || list.closest('.filterable')) return;
+    let n = 0;
+    Array.prototype.forEach.call(list.querySelectorAll('.browse-item'), function (item) {
+      const kindEl = item.querySelector('.browse-kind');
+      const kind = ((kindEl && kindEl.textContent) || '').trim().toLowerCase();
+      if (kind !== 'up') n++;
+    });
+    if (!n) return;
+    const box = document.createElement('div');
+    box.className = 'filterable browse-filter';
+    const r = parseRoute();
+    box.setAttribute(
+      'data-filter-key',
+      ['browse', r.kind, (r.parts || []).join('/')].join('\t')
+    );
+    list.parentNode.insertBefore(box, list);
+    box.insertAdjacentHTML('afterbegin', filterBarHtml(FILTER_HINT));
+    box.appendChild(list);
+    wireListFilters(pane);
+  }
+
   async function fillVolumeBrowsePane(pane, opts) {
     const mount = opts.mount;
     const path = opts.path || '';
@@ -518,6 +542,7 @@
           path ? 'Contents' : 'Files'
         )) +
         '</div>';
+      attachBrowseFilter(pane);
     } catch (e) {
       pane.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
@@ -666,6 +691,7 @@
       }
 
       pane.innerHTML = html;
+      attachBrowseFilter(pane);
     } catch (e) {
       pane.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
@@ -1291,6 +1317,28 @@
         const match = textMatchesFilter(tr.textContent || '', q);
         tr.hidden = !match;
         if (match) shown++;
+      });
+    } else if (box.querySelector('.browse-list, .browse-item')) {
+      Array.prototype.forEach.call(box.querySelectorAll('.browse-item'), function (item) {
+        const kindEl = item.querySelector('.browse-kind');
+        const kind = ((kindEl && kindEl.textContent) || '').trim().toLowerCase();
+        if (kind === 'up') {
+          item.hidden = false;
+          return;
+        }
+        total++;
+        const match = textMatchesFilter(item.textContent || '', q);
+        item.hidden = !match;
+        if (match) shown++;
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('.browse-section'), function (sec) {
+        let el = sec.nextElementSibling;
+        let any = false;
+        while (el && !el.classList.contains('browse-section')) {
+          if (el.classList.contains('browse-item') && !el.hidden) any = true;
+          el = el.nextElementSibling;
+        }
+        sec.hidden = !!q && !any;
       });
     } else {
       const kv = box.querySelector('dl.kv');

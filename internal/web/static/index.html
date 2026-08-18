@@ -527,7 +527,9 @@
     .browse-pane {
       width: var(--browse-pane-w, 300px);
       flex-shrink: 0;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       border-right: 1px solid var(--border);
       background: var(--bg-elevated);
       padding: 0.45rem 0.4rem 0.75rem;
@@ -547,10 +549,31 @@
       word-break: break-all;
     }
     .browse-pane .browse-crumbs a { color: var(--link); }
+    .browse-pane .browse-filter {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      margin-bottom: 0;
+    }
+    .browse-pane .browse-filter .list-filter {
+      flex-shrink: 0;
+      margin: 0 0.15rem 0.35rem;
+    }
+    .browse-pane .browse-filter .list-filter input[type="search"] {
+      max-width: none;
+    }
     .browse-pane .browse-list {
       display: flex;
       flex-direction: column;
       gap: 1px;
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+    .browse-pane .browse-item[hidden],
+    .browse-pane .browse-section[hidden] {
+      display: none !important;
     }
     .browse-pane .browse-item {
       display: flex;
