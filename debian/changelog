@@ -1,3 +1,9 @@
+zfstool (0.2.8-1) unstable; urgency=medium
+
+  * Browse non-ZFS mounted volumes (/, /boot, ext4, EFI, …) like datasets.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 18 Aug 2026 21:02:19 +0000
+
 zfstool (0.2.7-1) unstable; urgency=medium
 
   * Ctrl++ / Ctrl+- change UI font size; Ctrl+0 resets (persisted).
