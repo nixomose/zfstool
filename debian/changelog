@@ -1,3 +1,9 @@
+zfstool (0.2.9-1) unstable; urgency=medium
+
+  * File browser filter box (comma OR, !exclude), persisted per dataset/volume.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 18 Aug 2026 23:04:54 +0000
+
 zfstool (0.2.8-1) unstable; urgency=medium
 
   * Browse non-ZFS mounted volumes (/, /boot, ext4, EFI, …) like datasets.
