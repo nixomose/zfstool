@@ -272,6 +272,15 @@ func (s *Server) handleDisks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, disks)
 }
 
+func (s *Server) handleMounts(w http.ResponseWriter, r *http.Request) {
+	mounts, err := collector.ListMounts(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, mounts)
+}
+
 func (s *Server) handleSmart(w http.ResponseWriter, r *http.Request) {
 	dev := r.PathValue("dev")
 	if dev == "" {

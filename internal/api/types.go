@@ -21,15 +21,15 @@ type HostInfo struct {
 
 // PoolSummary is a row from zpool list.
 type PoolSummary struct {
-	Name         string  `json:"name"`
-	Size         uint64  `json:"size"`
-	Allocated    uint64  `json:"allocated"`
-	Free         uint64  `json:"free"`
+	Name          string  `json:"name"`
+	Size          uint64  `json:"size"`
+	Allocated     uint64  `json:"allocated"`
+	Free          uint64  `json:"free"`
 	Fragmentation *uint64 `json:"fragmentationPct,omitempty"`
-	CapacityPct  *uint64 `json:"capacityPct,omitempty"`
-	DedupRatio   string  `json:"dedupRatio,omitempty"`
-	Health       string  `json:"health"`
-	AltRoot      string  `json:"altroot,omitempty"`
+	CapacityPct   *uint64 `json:"capacityPct,omitempty"`
+	DedupRatio    string  `json:"dedupRatio,omitempty"`
+	Health        string  `json:"health"`
+	AltRoot       string  `json:"altroot,omitempty"`
 }
 
 // PoolStatus is parsed zpool status -P style tree + raw lines for maintenance.
@@ -75,15 +75,19 @@ type Checkpoint struct {
 
 // DatasetRow from zfs list.
 type DatasetRow struct {
-	Name          string            `json:"name"`
-	Type          string            `json:"type"`
-	Used          uint64            `json:"used"`
-	Avail         uint64            `json:"avail"`
-	Refer         uint64            `json:"refer"`
-	Mountpoint    string            `json:"mountpoint,omitempty"`
-	Origin        string            `json:"origin,omitempty"`
-	Properties    map[string]string `json:"properties,omitempty"`
-	PropertySource map[string]string `json:"propertySource,omitempty"`
+	Name                 string            `json:"name"`
+	Type                 string            `json:"type"`
+	Used                 uint64            `json:"used"`
+	Avail                uint64            `json:"avail"`
+	Refer                uint64            `json:"refer"`
+	Mountpoint           string            `json:"mountpoint,omitempty"`
+	Origin               string            `json:"origin,omitempty"`
+	UsedByDataset        uint64            `json:"usedByDataset,omitempty"`
+	UsedBySnapshots      uint64            `json:"usedBySnapshots,omitempty"`
+	UsedByChildren       uint64            `json:"usedByChildren,omitempty"`
+	UsedByRefreservation uint64            `json:"usedByRefreservation,omitempty"`
+	Properties           map[string]string `json:"properties,omitempty"`
+	PropertySource       map[string]string `json:"propertySource,omitempty"`
 }
 
 // PoolHistoryEntry is one zpool history line.
@@ -102,13 +106,13 @@ type MaintenanceBundle struct {
 
 // IOStatSample from zpool iostat one line (simplified).
 type IOStatSample struct {
-	Pool  string   `json:"pool"`
-	VDev  string   `json:"vdev,omitempty"`
-	CapOpsRead  float64 `json:"capOpsRead,omitempty"`
-	CapOpsWrite float64 `json:"capOpsWrite,omitempty"`
-	BandwidthRead  string `json:"bandwidthRead,omitempty"`
-	BandwidthWrite string `json:"bandwidthWrite,omitempty"`
-	Raw   []string `json:"raw,omitempty"`
+	Pool           string   `json:"pool"`
+	VDev           string   `json:"vdev,omitempty"`
+	CapOpsRead     float64  `json:"capOpsRead,omitempty"`
+	CapOpsWrite    float64  `json:"capOpsWrite,omitempty"`
+	BandwidthRead  string   `json:"bandwidthRead,omitempty"`
+	BandwidthWrite string   `json:"bandwidthWrite,omitempty"`
+	Raw            []string `json:"raw,omitempty"`
 }
 
 // DiskMembership is one pool that uses a block device as a vdev leaf.
@@ -118,15 +122,47 @@ type DiskMembership struct {
 	Path  string `json:"path,omitempty"` // topology path under the pool
 }
 
-// DiskSummary is a unique block device found across pool status trees.
+// DiskSummary is a block device (whole disk or partition). ListDisks returns
+// physical disks with nested Children (partitions and other descendants).
 type DiskSummary struct {
-	Device string           `json:"device"`
-	Pools  []DiskMembership `json:"pools,omitempty"`
+	Device     string           `json:"device"`
+	Name       string           `json:"name,omitempty"`
+	Type       string           `json:"type,omitempty"` // disk, part, lvm, crypt, loop, rom, raid…
+	Size       uint64           `json:"size,omitempty"`
+	Used       uint64           `json:"used,omitempty"`
+	Avail      uint64           `json:"avail,omitempty"`
+	Media      string           `json:"media,omitempty"` // ssd, hdd, unknown
+	Rotational *bool            `json:"rotational,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	Serial     string           `json:"serial,omitempty"`
+	Transport  string           `json:"transport,omitempty"`
+	Vendor     string           `json:"vendor,omitempty"`
+	Fstype     string           `json:"fstype,omitempty"`
+	Mountpoint string           `json:"mountpoint,omitempty"`
+	Label      string           `json:"label,omitempty"`
+	PartLabel  string           `json:"partLabel,omitempty"`
+	UUID       string           `json:"uuid,omitempty"`
+	Parent     string           `json:"parent,omitempty"`
+	Pools      []DiskMembership `json:"pools,omitempty"`
+	Children   []DiskSummary    `json:"children,omitempty"`
+}
+
+// MountEntry is a mounted filesystem, including non-ZFS volumes such as / and /boot.
+type MountEntry struct {
+	Target  string `json:"target"`
+	Source  string `json:"source"`
+	Fstype  string `json:"fstype"`
+	Options string `json:"options,omitempty"`
+	Size    uint64 `json:"size,omitempty"`
+	Used    uint64 `json:"used,omitempty"`
+	Avail   uint64 `json:"avail,omitempty"`
+	Label   string `json:"label,omitempty"`
+	UUID    string `json:"uuid,omitempty"`
 }
 
 // SMART error_kind values for UI hints.
 const (
-	SMARTErrorNotFound   = "not_found"   // smartctl binary missing
+	SMARTErrorNotFound   = "not_found"  // smartctl binary missing
 	SMARTErrorPermission = "permission" // cannot open block device
 	SMARTErrorFailed     = "failed"     // smartctl ran but returned no usable data
 )

@@ -44,6 +44,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /v1/zfs-allow", s.handleZfsAllow)
 	m.HandleFunc("GET /v1/disks", s.handleDisks)
 	m.HandleFunc("GET /v1/disk/{dev}/smart", s.handleSmart)
+	m.HandleFunc("GET /v1/mounts", s.handleMounts)
 	m.HandleFunc("POST /v1/zfs-diff", s.handleZfsDiff)
 }
 

@@ -10,13 +10,24 @@ import (
 	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
+const datasetListColsFull = "name,type,used,avail,refer,mountpoint,origin,usedbydataset,usedbysnapshots,usedbychildren,usedbyrefreservation"
+const datasetListColsBasic = "name,type,used,avail,refer,mountpoint,origin"
+
 // ListDatasets lists all datasets with common columns.
 // Includes filesystems, snapshots, and volumes. (Plain "zfs list" omits snapshots by default.)
 func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
+	rows, err := listDatasetsWith(ctx, pool, datasetListColsFull)
+	if err != nil {
+		return listDatasetsWith(ctx, pool, datasetListColsBasic)
+	}
+	return rows, nil
+}
+
+func listDatasetsWith(ctx context.Context, pool, cols string) ([]api.DatasetRow, error) {
 	args := []string{
 		"list", "-Hp",
 		"-t", "filesystem,snapshot,volume",
-		"-o", "name,type,used,avail,refer,mountpoint,origin",
+		"-o", cols,
 	}
 	if pool != "" {
 		var err error
@@ -29,6 +40,10 @@ func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseDatasetList(out), nil
+}
+
+func parseDatasetList(out []byte) []api.DatasetRow {
 	var rows []api.DatasetRow
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
@@ -40,24 +55,42 @@ func ListDatasets(ctx context.Context, pool string) ([]api.DatasetRow, error) {
 			continue
 		}
 		r := api.DatasetRow{Name: f[0], Type: f[1]}
-		if v, e := strconv.ParseUint(f[2], 10, 64); e == nil {
-			r.Used = v
-		}
-		if v, e := strconv.ParseUint(f[3], 10, 64); e == nil {
-			r.Avail = v
-		}
-		if v, e := strconv.ParseUint(f[4], 10, 64); e == nil {
-			r.Refer = v
-		}
-		if len(f) > 5 {
+		r.Used = parseZfsUint(f[2])
+		r.Avail = parseZfsUint(f[3])
+		r.Refer = parseZfsUint(f[4])
+		if len(f) > 5 && f[5] != "-" {
 			r.Mountpoint = f[5]
 		}
-		if len(f) > 6 {
+		if len(f) > 6 && f[6] != "-" {
 			r.Origin = f[6]
+		}
+		if len(f) > 7 {
+			r.UsedByDataset = parseZfsUint(f[7])
+		}
+		if len(f) > 8 {
+			r.UsedBySnapshots = parseZfsUint(f[8])
+		}
+		if len(f) > 9 {
+			r.UsedByChildren = parseZfsUint(f[9])
+		}
+		if len(f) > 10 {
+			r.UsedByRefreservation = parseZfsUint(f[10])
 		}
 		rows = append(rows, r)
 	}
-	return rows, nil
+	return rows
+}
+
+func parseZfsUint(s string) uint64 {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "-" {
+		return 0
+	}
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // GetDatasetProperties runs zfs get -H -p -o property,value,source all dataset

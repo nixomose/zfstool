@@ -10,9 +10,9 @@ The default command opens a **desktop UI** (native **WebKit** window on Linux wh
 
 ## What it does
 
-- **GUI / web UI:** Browse storage pools, drill down into vdevs and disks, view dataset and zvol properties, and open SMART details where `smartctl` is available.
+- **GUI / web UI:** Browse storage pools, drill down into vdevs and disks, view dataset and zvol properties, and open SMART details where `smartctl` is available. Partition maps, mounted volumes (`/`, `/boot`, …), and dataset usage bars are included even when they are not ZFS.
 - **API server:** Serves a JSON HTTP API over a **Unix domain socket** (and optionally TCP) for the UI and for tools that speak HTTP.
-- **Host view:** OS, kernel, memory, ZFS versions, ARC stats.
+- **Host view:** OS, kernel, memory, ZFS versions, ARC stats, disks (SSD vs HDD), and mounts.
 
 Data comes from `zfs(8)`, `zpool(8)`, and related read-only sources on the machine where the API server runs.
 
@@ -26,6 +26,7 @@ Data comes from `zfs(8)`, `zpool(8)`, and related read-only sources on the machi
 | **Go 1.22+** | Build |
 | **GTK 3 + WebKit2GTK** | Native GUI (`make build`); package names vary by distro (e.g. `libgtk-3-dev`, `libwebkit2gtk-4.1-dev` on recent Debian/Ubuntu) |
 | **`smartctl`** (package `smartmontools`) | Optional; disk SMART in the UI |
+| **`lsblk`** / **`df`** | Optional; partition maps and mounted volumes |
 
 Ubuntu **22.04** ships WebKit **4.0**; **24.04+** typically uses **4.1**. This repo vendors a small `webview` tweak for 4.1; see [`third_party/README.md`](third_party/README.md) if you need **4.0**.
 
@@ -98,7 +99,9 @@ zfstool help
 ### UI shortcuts (native / web)
 
 - **F5** — refresh the current view (scroll position preserved where possible).
+- **Back** (breadcrumb bar) / **Alt+Left** — return to the previous view.
 - **Ctrl+Q** / **Ctrl+W** — close the **native** window only (when the WebView binding is present).
+- List filters accept comma-separated terms and `!exclude` (state is kept in the browser).
 
 ---
 
@@ -156,7 +159,8 @@ More detail: [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt).
 The API server exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`**, for example:
 
 - `/v1/host`, `/v1/pools`, `/v1/pools/{pool}/status`, `/v1/datasets`, `/v1/datasets/properties`
-- `/v1/disks` (aggregate block devices across pools), `/v1/disk/{dev}/smart`
+- `/v1/disks` (all block devices with partitions, media type, and pool membership), `/v1/disk/{dev}/smart`
+- `/v1/mounts` (mounted filesystems including non-ZFS volumes)
 - `/v1/pools/{pool}/history`, `/maintenance`, `/properties`, `/devices`
 - `/v1/bookmarks`, `/v1/snapshots/holds`, `/v1/iostat`, `/v1/graph`, `/v1/kernel-log`, `/v1/module-params`, `/v1/zfs-allow`
 - `GET /v1/browse?dataset=&path=` — list files/dirs under a filesystem or snapshot mount (confined)

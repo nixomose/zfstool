@@ -3,9 +3,15 @@
 
   const appEl = document.getElementById('app');
   const crumbEl = document.getElementById('crumb');
+  const crumbPathEl = document.getElementById('crumb-path');
+  const crumbBackBtn = document.getElementById('crumb-back');
   const sidebarEl = document.getElementById('sidebar-nav');
   const connPill = document.getElementById('conn-pill');
   const topbarMeta = document.getElementById('topbar-meta');
+
+  const FILTERS_STORE = 'zfstool.filters';
+  const COLWIDTHS_STORE = 'zfstool.colWidths';
+  const FILTER_HINT = 'Filter…  comma = OR,  !foo = exclude';
 
   const nav = {
     poolsOpen: true,
@@ -14,7 +20,7 @@
     diskKids: {},
     dsOpen: {}, // filesystem or snapshot name → expanded
     dirOpen: {}, // dataset + '\t' + relPath → expanded
-    poolFilter: '',
+    poolFilter: loadStored('zfstool.nav.poolFilter', ''),
     includeFiles: loadIncludeFiles(),
     smart: {},
   };
@@ -22,7 +28,28 @@
   let poolsCache = null;
   let disksCache = null;
   let hostCache = null;
+  let mountsCache = null;
   let sidebarBuiltFor = '';
+
+  const viewHistory = [];
+  let ignoreViewHistory = false;
+
+  function loadStored(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      if (v == null) return fallback;
+      return v;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function saveStored(key, val) {
+    try {
+      if (val == null || val === '') localStorage.removeItem(key);
+      else localStorage.setItem(key, String(val));
+    } catch (_) {}
+  }
 
   function loadIncludeFiles() {
     try {
@@ -240,6 +267,7 @@
     if (segments.length === 0) return { kind: 'home', parts: [], query: query };
     if (segments[0] === 'host') return { kind: 'host', parts: [], query: query };
     if (segments[0] === 'remote') return { kind: 'remote', parts: [], query: query };
+    if (segments[0] === 'volumes') return { kind: 'volumes', parts: [], query: query };
     if (segments[0] === 'disk' && segments[1] != null) {
       return { kind: 'disk', parts: [segments.slice(1).join('/')], query: query };
     }
@@ -263,14 +291,61 @@
     return { kind: 'home', parts: [], query: query };
   }
 
-  function renderBreadcrumbs(items) {
-    if (!items || !items.length) {
-      crumbEl.classList.add('crumb--hidden');
-      crumbEl.innerHTML = '';
+  function normalizeHash(h) {
+    let s = String(h || '');
+    if (s.charAt(0) === '#') s = s.slice(1);
+    s = s.trim();
+    if (!s) return '/';
+    return s.charAt(0) === '/' ? s : '/' + s;
+  }
+
+  function currentHash() {
+    return normalizeHash(location.hash);
+  }
+
+  function noteViewVisit(hash) {
+    const h = normalizeHash(hash || currentHash());
+    if (ignoreViewHistory) {
+      ignoreViewHistory = false;
+      updateBackButton();
       return;
     }
-    crumbEl.classList.remove('crumb--hidden');
-    crumbEl.innerHTML = items
+    if (viewHistory.length >= 2 && viewHistory[viewHistory.length - 2] === h) {
+      viewHistory.pop();
+      updateBackButton();
+      return;
+    }
+    if (viewHistory.length && viewHistory[viewHistory.length - 1] === h) {
+      updateBackButton();
+      return;
+    }
+    viewHistory.push(h);
+    updateBackButton();
+  }
+
+  function goViewBack() {
+    if (viewHistory.length < 2) return;
+    viewHistory.pop();
+    const prev = viewHistory[viewHistory.length - 1] || '/';
+    ignoreViewHistory = true;
+    location.hash = '#' + prev;
+  }
+
+  function updateBackButton() {
+    if (!crumbBackBtn) return;
+    crumbBackBtn.disabled = viewHistory.length < 2;
+  }
+
+  function renderBreadcrumbs(items) {
+    const pathEl = crumbPathEl || crumbEl;
+    if (!items || !items.length) {
+      if (pathEl) pathEl.innerHTML = '';
+      if (crumbEl) crumbEl.classList.remove('crumb--hidden');
+      updateBackButton();
+      return;
+    }
+    if (crumbEl) crumbEl.classList.remove('crumb--hidden');
+    const html = items
       .map(function (it, i) {
         let piece;
         if (it.hash == null) {
@@ -281,6 +356,8 @@
         return (i > 0 ? '<span class="crumb-sep">›</span> ' : '') + piece;
       })
       .join(' ');
+    if (pathEl) pathEl.innerHTML = html;
+    updateBackButton();
   }
 
   function diskHref(dev) {
@@ -635,6 +712,524 @@
     return '<a href="' + esc(diskHref(dev)) + '" title="' + esc(dev) + '">' + esc(shortDev(dev)) + '</a>';
   }
 
+  function mediaLabel(media) {
+    const m = String(media || '').toLowerCase();
+    if (m === 'ssd') return 'SSD';
+    if (m === 'hdd') return 'HDD';
+    return '';
+  }
+
+  function mediaTagHtml(media) {
+    const label = mediaLabel(media);
+    if (!label) return '';
+    const title = label === 'HDD' ? 'Rotational disk (spinner)' : 'Solid-state disk';
+    const cls = label === 'HDD' ? 'tag-hdd' : 'tag-ssd';
+    return (
+      ' <span class="tag tag-media ' +
+      cls +
+      '" title="' +
+      title +
+      '">' +
+      label +
+      '</span>'
+    );
+  }
+
+  function flattenDisks(disks) {
+    const out = [];
+    function walk(d, parent) {
+      out.push({ disk: d, parent: parent });
+      (d.children || []).forEach(function (c) {
+        walk(c, d);
+      });
+    }
+    (disks || []).forEach(function (d) {
+      walk(d, null);
+    });
+    return out;
+  }
+
+  function findDiskNode(disks, path) {
+    const want = String(path || '');
+    const short = shortDev(want);
+    const wantBase = want.replace(/^\/dev\//, '');
+    let hit = null;
+    flattenDisks(disks).forEach(function (x) {
+      const d = x.disk;
+      if (
+        d.device === want ||
+        d.name === want ||
+        d.name === wantBase ||
+        shortDev(d.device) === short ||
+        d.device === '/dev/' + wantBase
+      ) {
+        hit = x;
+      }
+    });
+    return hit;
+  }
+
+  function partKind(d) {
+    const fs = String((d && d.fstype) || '').toLowerCase();
+    if (fs.indexOf('zfs') >= 0) return 'zfs';
+    if (fs === 'vfat' || fs === 'fat' || fs === 'fat32' || fs === 'efi' || fs === 'msdos') return 'vfat';
+    if (fs === 'swap') return 'swap';
+    if (fs === 'ext2' || fs === 'ext3' || fs === 'ext4' || fs === 'xfs' || fs === 'btrfs' || fs === 'ntfs') {
+      return fs.indexOf('ext') === 0 ? 'ext' : fs;
+    }
+    if (fs === 'crypto_luks' || fs === 'luks') return 'crypt';
+    if ((d && d.type) === 'lvm' || fs === 'lvm2_member') return 'lvm';
+    if ((d && d.type) === 'part') return 'part';
+    return fs || 'other';
+  }
+
+  function usageBarHtml(segments, opts) {
+    opts = opts || {};
+    const segs = (segments || []).filter(function (s) {
+      return s && (s.bytes > 0 || s.keep);
+    });
+    if (!segs.length) return '';
+    let total = Number(opts.total) || 0;
+    let sum = 0;
+    segs.forEach(function (s) {
+      sum += Number(s.bytes) || 0;
+    });
+    if (total < sum) total = sum;
+    if (total <= 0) return '';
+    const minPct = 0.6;
+    const weights = segs.map(function (s) {
+      const pct = (100 * (Number(s.bytes) || 0)) / total;
+      return Math.max(pct, s.bytes > 0 || s.keep ? minPct : 0);
+    });
+    let wsum = 0;
+    weights.forEach(function (w) {
+      wsum += w;
+    });
+    const bar =
+      '<div class="usage-bar" role="img" aria-label="' +
+      esc(opts.aria || 'Usage') +
+      '">' +
+      segs
+        .map(function (s, i) {
+          const pct = (100 * weights[i]) / (wsum || 1);
+          const kind = s.kind || 'other';
+          const cls =
+            'seg kind-' +
+            kind +
+            (kind === 'free' ? ' is-free' : '') +
+            (kind === 'unalloc' ? ' is-unalloc' : '');
+          const label = s.label || '';
+          const title = (s.title || label) + (s.bytes != null ? ' · ' + fmtBytes(s.bytes) : '');
+          const inner = pct >= 8 ? esc(label) : '';
+          const style = 'flex: ' + pct.toFixed(3) + ' 1 0%;';
+          if (s.href) {
+            return (
+              '<a class="' +
+              cls +
+              '" href="' +
+              esc(s.href) +
+              '" title="' +
+              esc(title) +
+              '" style="' +
+              style +
+              '">' +
+              inner +
+              '</a>'
+            );
+          }
+          return (
+            '<span class="' +
+            cls +
+            '" title="' +
+            esc(title) +
+            '" style="' +
+            style +
+            '">' +
+            inner +
+            '</span>'
+          );
+        })
+        .join('') +
+      '</div>';
+    let legend = '';
+    if (opts.legend !== false) {
+      legend =
+        '<div class="usage-legend">' +
+        segs
+          .map(function (s) {
+            const kind = s.kind || 'other';
+            const text =
+              esc(s.label || kind) +
+              ' <span class="mono">' +
+              esc(fmtBytes(s.bytes || 0)) +
+              '</span>';
+            const sw = '<span class="usage-swatch kind-' + kind + '"></span>';
+            if (s.href) {
+              return '<span>' + sw + '<a href="' + esc(s.href) + '">' + text + '</a></span>';
+            }
+            return '<span>' + sw + text + '</span>';
+          })
+          .join('') +
+        '</div>';
+    }
+    const cap = opts.label
+      ? '<div class="usage-bar-label">' + esc(opts.label) + '</div>'
+      : '';
+    return '<div class="usage-bar-wrap">' + cap + bar + legend + '</div>';
+  }
+
+  function diskPartitionBarHtml(disk, highlightDev) {
+    if (!disk) return '';
+    const kids = disk.children || [];
+    const segs = [];
+    let used = 0;
+    kids.forEach(function (p) {
+      const sz = Number(p.size) || 0;
+      used += sz;
+      const mp = p.mountpoint ? ' · ' + p.mountpoint : '';
+      const fs = p.fstype ? ' · ' + p.fstype : '';
+      segs.push({
+        label: shortDev(p.device || p.name) + (p.mountpoint ? ' ' + p.mountpoint : ''),
+        title:
+          (p.device || p.name) +
+          fs +
+          mp +
+          (p.label ? ' · ' + p.label : '') +
+          (p.partLabel ? ' · ' + p.partLabel : ''),
+        bytes: sz,
+        href: diskHref(p.device || p.name),
+        kind: partKind(p),
+        keep: highlightDev && (p.device === highlightDev || p.name === shortDev(highlightDev)),
+      });
+    });
+    const diskSize = Number(disk.size) || 0;
+    if (diskSize > used + 1024 * 1024) {
+      segs.push({
+        label: 'unallocated',
+        bytes: diskSize - used,
+        kind: 'unalloc',
+      });
+    } else if (!kids.length && diskSize > 0) {
+      segs.push({
+        label: shortDev(disk.device) + (disk.mountpoint ? ' ' + disk.mountpoint : ''),
+        title: disk.device + (disk.fstype ? ' · ' + disk.fstype : ''),
+        bytes: diskSize,
+        href: diskHref(disk.device),
+        kind: partKind(disk),
+      });
+    }
+    if (!segs.length) return '';
+    return usageBarHtml(segs, {
+      total: diskSize || used,
+      label: shortDev(disk.device) + (disk.model ? ' · ' + disk.model : ''),
+      aria: 'Partitions on ' + (disk.device || ''),
+    });
+  }
+
+  function parentDatasetName(name) {
+    const n = String(name || '');
+    const at = n.indexOf('@');
+    if (at >= 0) return n.slice(0, at);
+    const i = n.lastIndexOf('/');
+    return i < 0 ? '' : n.slice(0, i);
+  }
+
+  function datasetUsageBarHtml(focusName, rows, poolSummary) {
+    rows = rows || [];
+    const isPool = !!(poolSummary && focusName === poolSummary.name);
+    const segs = [];
+    const children = rows.filter(function (d) {
+      if (d.type === 'snapshot') return false;
+      return parentDatasetName(d.name) === focusName;
+    });
+    const snaps = rows.filter(function (d) {
+      return d.type === 'snapshot' && d.name.indexOf(focusName + '@') === 0;
+    });
+    const self = rows.find(function (d) {
+      return d.name === focusName;
+    });
+
+    children.forEach(function (d) {
+      segs.push({
+        label: shortDatasetLabel(d.name, poolOfDataset(d.name)),
+        title: d.name + (d.type === 'volume' ? ' (volume)' : ''),
+        bytes: Number(d.used) || 0,
+        href: d.type === 'volume' ? zvolHref(poolOfDataset(d.name), d.name) : datasetHref(poolOfDataset(d.name), d.name),
+        kind: 'dataset',
+        keep: true,
+      });
+    });
+    const snapCap = 20;
+    snaps.slice(0, snapCap).forEach(function (d) {
+      segs.push({
+        label: '@' + snapNameOf(d.name),
+        title: d.name,
+        bytes: Number(d.used) || 0,
+        href: datasetHref(poolOfDataset(d.name), d.name),
+        kind: 'snap',
+        keep: true,
+      });
+    });
+    if (snaps.length > snapCap) {
+      let rest = 0;
+      snaps.slice(snapCap).forEach(function (d) {
+        rest += Number(d.used) || 0;
+      });
+      segs.push({
+        label: '+' + (snaps.length - snapCap) + ' snaps',
+        bytes: rest,
+        kind: 'snap',
+        keep: true,
+      });
+    }
+    if (self) {
+      const dataBytes = Number(self.usedByDataset) || 0;
+      if (dataBytes > 0) {
+        segs.push({
+          label: 'data',
+          bytes: dataBytes,
+          href: datasetHref(poolOfDataset(self.name), self.name),
+          kind: 'data',
+        });
+      }
+      const res = Number(self.usedByRefreservation) || 0;
+      if (res > 0) {
+        segs.push({ label: 'reservation', bytes: res, kind: 'other' });
+      }
+    }
+    let total = 0;
+    if (isPool && poolSummary) {
+      total = Number(poolSummary.size) || 0;
+      const free = Number(poolSummary.free) || 0;
+      if (free > 0) segs.push({ label: 'free', bytes: free, kind: 'free' });
+    } else if (self) {
+      total = (Number(self.used) || 0) + (Number(self.avail) || 0);
+      const avail = Number(self.avail) || 0;
+      if (avail > 0) segs.push({ label: 'available', bytes: avail, kind: 'free' });
+    }
+    if (!segs.length) return '';
+    return usageBarHtml(segs, {
+      total: total,
+      label: isPool ? 'Pool space' : 'Dataset space',
+      aria: 'Space used by ' + focusName,
+    });
+  }
+
+  function mountBarHtml(m) {
+    const size = Number(m.size) || 0;
+    const used = Number(m.used) || 0;
+    const avail = Number(m.avail) || Math.max(0, size - used);
+    if (!size && !used) return '';
+    const fs = String(m.fstype || '').toLowerCase();
+    let kind = 'other';
+    if (fs.indexOf('zfs') >= 0) kind = 'zfs';
+    else if (fs.indexOf('ext') === 0) kind = 'ext';
+    else if (fs === 'vfat' || fs === 'fat32') kind = 'vfat';
+    else if (fs === 'xfs' || fs === 'btrfs') kind = fs;
+    const href =
+      m.source && String(m.source).indexOf('/dev/') === 0
+        ? diskHref(m.source)
+        : m.fstype === 'zfs'
+          ? datasetHref(poolOfDataset(m.source), m.source)
+          : '';
+    return usageBarHtml(
+      [
+        { label: 'used', bytes: used, kind: kind, href: href || undefined },
+        { label: 'free', bytes: avail, kind: 'free' },
+      ],
+      { total: size || used + avail, legend: true, label: m.target }
+    );
+  }
+
+  function parseFilterTokens(query) {
+    const include = [];
+    const exclude = [];
+    String(query || '')
+      .split(',')
+      .forEach(function (part) {
+        const t = part.trim();
+        if (!t) return;
+        if (t.charAt(0) === '!') {
+          const rest = t.slice(1).trim().toLowerCase();
+          if (rest) exclude.push(rest);
+        } else {
+          include.push(t.toLowerCase());
+        }
+      });
+    return { include: include, exclude: exclude };
+  }
+
+  function textMatchesFilter(text, query) {
+    const q = String(query || '').trim();
+    if (!q) return true;
+    const t = String(text || '').toLowerCase();
+    const tok = parseFilterTokens(q);
+    let i;
+    for (i = 0; i < tok.exclude.length; i++) {
+      if (t.indexOf(tok.exclude[i]) >= 0) return false;
+    }
+    if (!tok.include.length) return true;
+    for (i = 0; i < tok.include.length; i++) {
+      if (t.indexOf(tok.include[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function loadFiltersMap() {
+    try {
+      const raw = localStorage.getItem(FILTERS_STORE);
+      if (!raw) return {};
+      const o = JSON.parse(raw);
+      return o && typeof o === 'object' ? o : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveFilterValue(key, val) {
+    if (!key) return;
+    try {
+      const m = loadFiltersMap();
+      const s = String(val || '');
+      if (s) m[key] = s;
+      else delete m[key];
+      localStorage.setItem(FILTERS_STORE, JSON.stringify(m));
+    } catch (_) {}
+  }
+
+  function nearbyHeadingText(box) {
+    let el = box.previousElementSibling;
+    for (let i = 0; i < 5 && el; i++) {
+      if (
+        el.classList &&
+        (el.classList.contains('sub') || el.classList.contains('page-title'))
+      ) {
+        return (el.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+      el = el.previousElementSibling;
+    }
+    const host = box.parentElement;
+    if (host) {
+      const h = host.querySelector('h2.page-title, h3.sub');
+      if (h) return (h.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+    return '';
+  }
+
+  function filterPersistKey(box) {
+    const explicit = box.getAttribute('data-filter-key');
+    if (explicit) return explicit;
+    const r = parseRoute();
+    const ths = Array.prototype.map
+      .call(box.querySelectorAll('thead th'), function (th) {
+        return (th.textContent || '').trim();
+      })
+      .join('|');
+    const input = box.querySelector('.list-filter-input');
+    const ph = input ? input.getAttribute('data-ph') || input.placeholder || '' : '';
+    return [
+      'v1',
+      r.kind,
+      (r.parts || []).join('/'),
+      (r.query && r.query.tab) || '',
+      nearbyHeadingText(box),
+      ths,
+      ph,
+    ].join('\t');
+  }
+
+  function colPersistKey(table) {
+    const r = parseRoute();
+    const ths = Array.prototype.map
+      .call(table.querySelectorAll('thead th'), function (th) {
+        return (th.textContent || '').trim();
+      })
+      .join('|');
+    const wrap = table.closest('.filterable') || table.closest('.table-wrap') || table;
+    return ['v1', r.kind, (r.parts || []).join('/'), (r.query && r.query.tab) || '', nearbyHeadingText(wrap), ths].join(
+      '\t'
+    );
+  }
+
+  function loadColWidths() {
+    try {
+      const raw = localStorage.getItem(COLWIDTHS_STORE);
+      if (!raw) return {};
+      const o = JSON.parse(raw);
+      return o && typeof o === 'object' ? o : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveColWidths(key, widths) {
+    if (!key) return;
+    try {
+      const m = loadColWidths();
+      m[key] = widths;
+      localStorage.setItem(COLWIDTHS_STORE, JSON.stringify(m));
+    } catch (_) {}
+  }
+
+  function filterBarHtml(placeholder) {
+    return (
+      '<div class="list-filter">' +
+      '<input type="search" class="list-filter-input" placeholder="' +
+      esc(placeholder || FILTER_HINT) +
+      '" title="Match any comma-separated term. Prefix with ! to exclude. Combine: foo,bar,!baz" autocomplete="off" spellcheck="false" />' +
+      '<span class="list-filter-count" hidden></span>' +
+      '</div>'
+    );
+  }
+
+  function applyListFilter(box, query) {
+    const q = String(query || '').trim();
+    const countEl = box.querySelector('.list-filter-count');
+    let total = 0;
+    let shown = 0;
+
+    const tbody = box.querySelector('table tbody');
+    if (tbody) {
+      Array.prototype.forEach.call(tbody.rows, function (tr) {
+        total++;
+        const match = textMatchesFilter(tr.textContent || '', q);
+        tr.hidden = !match;
+        if (match) shown++;
+      });
+    } else {
+      const kv = box.querySelector('dl.kv');
+      if (kv) {
+        Array.prototype.forEach.call(kv.querySelectorAll('dt'), function (dt) {
+          total++;
+          const dd = dt.nextElementSibling;
+          const text =
+            (dt.textContent || '') + ' ' + (dd && dd.tagName === 'DD' ? dd.textContent || '' : '');
+          const match = textMatchesFilter(text, q);
+          dt.hidden = !match;
+          if (dd && dd.tagName === 'DD') dd.hidden = !match;
+          if (match) shown++;
+        });
+      } else {
+        Array.prototype.forEach.call(box.querySelectorAll('.filter-line'), function (line) {
+          total++;
+          const match = textMatchesFilter(line.textContent || '', q);
+          line.hidden = !match;
+          if (match) shown++;
+        });
+      }
+    }
+
+    if (countEl) {
+      if (q && total > 0) {
+        countEl.hidden = false;
+        countEl.textContent = shown + '/' + total;
+      } else {
+        countEl.hidden = true;
+        countEl.textContent = '';
+      }
+    }
+  }
+
   function smartURL(dev) {
     const seg = String(dev).indexOf('/dev/') === 0 ? dev : '/dev/' + String(dev).replace(/^\//, '');
     return '/v1/disk/' + encSeg(seg) + '/smart';
@@ -743,75 +1338,19 @@
     );
   }
 
-  function filterBarHtml(placeholder) {
-    return (
-      '<div class="list-filter">' +
-      '<input type="search" class="list-filter-input" placeholder="' +
-      esc(placeholder || 'Filter…') +
-      '" autocomplete="off" spellcheck="false" />' +
-      '<span class="list-filter-count" hidden></span>' +
-      '</div>'
-    );
-  }
-
-  function applyListFilter(box, query) {
-    const q = String(query || '')
-      .trim()
-      .toLowerCase();
-    const countEl = box.querySelector('.list-filter-count');
-    let total = 0;
-    let shown = 0;
-
-    const tbody = box.querySelector('table tbody');
-    if (tbody) {
-      Array.prototype.forEach.call(tbody.rows, function (tr) {
-        total++;
-        const match = !q || (tr.textContent || '').toLowerCase().indexOf(q) >= 0;
-        tr.hidden = !match;
-        if (match) shown++;
-      });
-    } else {
-      const kv = box.querySelector('dl.kv');
-      if (kv) {
-        Array.prototype.forEach.call(kv.querySelectorAll('dt'), function (dt) {
-          total++;
-          const dd = dt.nextElementSibling;
-          const text =
-            (dt.textContent || '') + ' ' + (dd && dd.tagName === 'DD' ? dd.textContent || '' : '');
-          const match = !q || text.toLowerCase().indexOf(q) >= 0;
-          dt.hidden = !match;
-          if (dd && dd.tagName === 'DD') dd.hidden = !match;
-          if (match) shown++;
-        });
-      } else {
-        Array.prototype.forEach.call(box.querySelectorAll('.filter-line'), function (line) {
-          total++;
-          const match = !q || (line.textContent || '').toLowerCase().indexOf(q) >= 0;
-          line.hidden = !match;
-          if (match) shown++;
-        });
-      }
-    }
-
-    if (countEl) {
-      if (q && total > 0) {
-        countEl.hidden = false;
-        countEl.textContent = shown + '/' + total;
-      } else {
-        countEl.hidden = true;
-        countEl.textContent = '';
-      }
-    }
-  }
-
   function wireListFilters(root) {
     const scope = root || appEl;
+    const saved = loadFiltersMap();
     Array.prototype.forEach.call(scope.querySelectorAll('.filterable'), function (box) {
       const input = box.querySelector('.list-filter-input');
       if (!input || input.dataset.wired === '1') return;
       input.dataset.wired = '1';
+      const key = filterPersistKey(box);
+      box.setAttribute('data-filter-key', key);
+      if (!input.value && saved[key]) input.value = saved[key];
       input.addEventListener('input', function () {
         applyListFilter(box, input.value);
+        saveFilterValue(key, input.value);
       });
       if (input.value) applyListFilter(box, input.value);
     });
@@ -831,7 +1370,7 @@
       const box = document.createElement('div');
       box.className = 'filterable';
       wrap.parentNode.insertBefore(box, wrap);
-      box.insertAdjacentHTML('afterbegin', filterBarHtml('Filter list…'));
+      box.insertAdjacentHTML('afterbegin', filterBarHtml(FILTER_HINT));
       box.appendChild(wrap);
     });
 
@@ -842,7 +1381,7 @@
       const box = document.createElement('div');
       box.className = 'filterable';
       kv.parentNode.insertBefore(box, kv);
-      box.insertAdjacentHTML('afterbegin', filterBarHtml('Filter fields…'));
+      box.insertAdjacentHTML('afterbegin', filterBarHtml(FILTER_HINT));
       box.appendChild(kv);
     });
 
@@ -858,7 +1397,7 @@
       const box = document.createElement('div');
       box.className = 'filterable';
       pre.parentNode.insertBefore(box, pre);
-      box.insertAdjacentHTML('afterbegin', filterBarHtml('Filter lines…'));
+      box.insertAdjacentHTML('afterbegin', filterBarHtml(FILTER_HINT));
       const host = document.createElement('pre');
       host.className = pre.className;
       host.innerHTML = lines
@@ -871,6 +1410,61 @@
     });
 
     wireListFilters(scope);
+    wireColumnResize(scope);
+  }
+
+  function wireColumnResize(root) {
+    const scope = root || appEl;
+    Array.prototype.forEach.call(scope.querySelectorAll('table'), function (table) {
+      if (table.dataset.colWired === '1') return;
+      const ths = table.querySelectorAll('thead th');
+      if (ths.length < 2) return;
+      table.dataset.colWired = '1';
+      const key = colPersistKey(table);
+      const saved = loadColWidths()[key];
+      if (saved && saved.length === ths.length) {
+        table.classList.add('cols-resized');
+        Array.prototype.forEach.call(ths, function (th, i) {
+          if (saved[i] > 0) th.style.width = saved[i] + 'px';
+        });
+      }
+      Array.prototype.forEach.call(ths, function (th, idx) {
+        if (th.querySelector('.col-resizer')) return;
+        const handle = document.createElement('span');
+        handle.className = 'col-resizer';
+        handle.title = 'Resize column';
+        th.appendChild(handle);
+        handle.addEventListener('pointerdown', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          table.classList.add('cols-resized');
+          const startX = e.clientX;
+          const startW = th.getBoundingClientRect().width;
+          document.body.classList.add('is-resizing-col');
+          try {
+            handle.setPointerCapture(e.pointerId);
+          } catch (_) {}
+          function onMove(ev) {
+            const w = Math.max(48, Math.round(startW + (ev.clientX - startX)));
+            th.style.width = w + 'px';
+          }
+          function onUp() {
+            document.body.classList.remove('is-resizing-col');
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            const widths = Array.prototype.map.call(ths, function (h) {
+              return Math.round(h.getBoundingClientRect().width);
+            });
+            saveColWidths(key, widths);
+          }
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+          window.addEventListener('pointercancel', onUp);
+        });
+        void idx;
+      });
+    });
   }
 
   function guessVdevRole(name) {
@@ -963,6 +1557,12 @@
     return disksCache;
   }
 
+  async function getMounts(force) {
+    if (!force && mountsCache) return mountsCache;
+    mountsCache = await j('/v1/mounts');
+    return mountsCache;
+  }
+
   async function getHost(force) {
     if (!force && hostCache) return hostCache;
     hostCache = await j('/v1/host');
@@ -997,6 +1597,7 @@
     }
     if (r.kind === 'disk') return { type: 'disk', id: r.parts[0] };
     if (r.kind === 'host') return { type: 'host' };
+    if (r.kind === 'volumes') return { type: 'volumes' };
     if (r.kind === 'remote') return { type: 'remote' };
     return { type: 'home' };
   }
@@ -1075,13 +1676,18 @@
       (active.type === 'host' ? ' active' : '') +
       '" href="#/host">Host</a>' +
       '<a class="nav-link' +
+      (active.type === 'volumes' ? ' active' : '') +
+      '" href="#/volumes">Volumes</a>' +
+      '<a class="nav-link' +
       (active.type === 'remote' ? ' active' : '') +
       '" href="#/remote">Remote</a>' +
       '</div>';
 
     html +=
       '<div class="nav-pool-filter list-filter">' +
-      '<input type="search" class="list-filter-input" id="nav-pool-filter" placeholder="Filter…" autocomplete="off" spellcheck="false" value="' +
+      '<input type="search" class="list-filter-input" id="nav-pool-filter" placeholder="' +
+      esc(FILTER_HINT) +
+      '" title="Match any comma-separated term. Prefix with ! to exclude." autocomplete="off" spellcheck="false" value="' +
       esc(nav.poolFilter || '') +
       '" />' +
       '<label class="nav-files-toggle" title="Show files and directories under datasets and snapshots">' +
@@ -1153,19 +1759,44 @@
     if (nav.disksOpen) {
       html += '<div class="nav-section-body">';
       if (!disks.length) {
-        html += '<div class="nav-empty">No disks in pool configs</div>';
+        html += '<div class="nav-empty">No disks</div>';
       } else {
         disks.forEach(function (d) {
           const open = !!nav.diskKids[d.device];
-          const isActive = active.type === 'disk' && active.id === d.device;
+          const childActive = (d.children || []).some(function (c) {
+            return active.type === 'disk' && (active.id === c.device || active.id === c.name);
+          });
+          const isActive =
+            (active.type === 'disk' && active.id === d.device) || childActive;
           const poolNames = (d.pools || [])
             .map(function (m) {
               return m.pool;
             })
+            .concat(
+              (d.children || []).reduce(function (acc, c) {
+                (c.pools || []).forEach(function (m) {
+                  if (acc.indexOf(m.pool) < 0) acc.push(m.pool);
+                });
+                return acc;
+              }, [])
+            )
             .join(', ');
+          const media = mediaLabel(d.media);
+          const searchBits = [
+            shortDev(d.device),
+            d.device,
+            poolNames,
+            media,
+            d.model || '',
+            (d.children || [])
+              .map(function (c) {
+                return (c.device || '') + ' ' + (c.mountpoint || '') + ' ' + (c.fstype || '');
+              })
+              .join(' '),
+          ].join(' ');
           html +=
             '<div class="nav-disk-entry" data-disk-name="' +
-            esc(shortDev(d.device) + ' ' + d.device + ' ' + poolNames) +
+            esc(searchBits) +
             '">' +
             '<div class="nav-item-row">' +
             '<button type="button" class="nav-twist" data-disk-kid="' +
@@ -1178,9 +1809,10 @@
             '" href="' +
             esc(diskHref(d.device)) +
             '" title="' +
-            esc(d.device + (poolNames ? ' · ' + poolNames : '')) +
+            esc(d.device + (poolNames ? ' · ' + poolNames : '') + (d.model ? ' · ' + d.model : '')) +
             '">' +
             esc(shortDev(d.device)) +
+            mediaTagHtml(d.media) +
             '</a></div>';
           if (open) {
             html += '<div class="nav-kids" data-disk-kids-for="' + esc(d.device) + '">';
@@ -1189,6 +1821,24 @@
               '<div class="smart-snip">' +
               (sm ? smartSnippetHtml(sm) : '<span class="muted">Loading SMART…</span>') +
               '</div>';
+            (d.children || []).forEach(function (p) {
+              const pActive = active.type === 'disk' && (active.id === p.device || active.id === p.name);
+              html +=
+                '<a class="' +
+                (pActive ? 'active' : '') +
+                '" href="' +
+                esc(diskHref(p.device)) +
+                '" title="' +
+                esc(
+                  (p.device || '') +
+                    (p.fstype ? ' · ' + p.fstype : '') +
+                    (p.mountpoint ? ' · ' + p.mountpoint : '')
+                ) +
+                '">' +
+                esc(shortDev(p.device || p.name)) +
+                (p.mountpoint ? ' · ' + esc(p.mountpoint) : '') +
+                '</a>';
+            });
             (d.pools || []).forEach(function (m) {
               html +=
                 '<a href="' +
@@ -1199,7 +1849,7 @@
                 '</a>';
             });
             html +=
-              '<a href="' + esc(diskHref(d.device)) + '">Full SMART →</a></div>';
+              '<a href="' + esc(diskHref(d.device)) + '">Disk details →</a></div>';
           }
           html += '</div>';
         });
@@ -1233,9 +1883,7 @@
   }
 
   function applyNavPoolFilter() {
-    const q = String(nav.poolFilter || '')
-      .trim()
-      .toLowerCase();
+    const q = String(nav.poolFilter || '').trim();
     let total = 0;
     let shown = 0;
 
@@ -1244,7 +1892,23 @@
       return ((link && link.textContent) || row.textContent || '').replace(/\s+/g, ' ').trim();
     }
 
-    /** Returns true if any visible match under kidsEl. forceShow = ancestor matched. */
+    function navMatch(text, forceShow) {
+      if (!q) return true;
+      const tok = parseFilterTokens(q);
+      const t = String(text || '').toLowerCase();
+      let i;
+      for (i = 0; i < tok.exclude.length; i++) {
+        if (t.indexOf(tok.exclude[i]) >= 0) return false;
+      }
+      if (forceShow) return true;
+      if (!tok.include.length) return true;
+      for (i = 0; i < tok.include.length; i++) {
+        if (t.indexOf(tok.include[i]) >= 0) return true;
+      }
+      return false;
+    }
+
+    /** Returns true if any visible match under kidsEl. forceShow = ancestor matched include. */
     function filterKids(kidsEl, forceShow) {
       if (!kidsEl) return false;
       let any = false;
@@ -1255,8 +1919,7 @@
           total++;
           const next = children[i + 1];
           const sub = next && next.classList.contains('nav-kids') ? next : null;
-          const selfMatch =
-            forceShow || !q || rowLabel(el).toLowerCase().indexOf(q) >= 0;
+          const selfMatch = navMatch(rowLabel(el), forceShow);
           const childMatch = filterKids(sub, selfMatch);
           const show = !q || selfMatch || childMatch;
           el.hidden = !show;
@@ -1270,8 +1933,7 @@
           }
         } else if (el.tagName === 'A' || el.classList.contains('nav-file')) {
           total++;
-          const selfMatch =
-            forceShow || !q || (el.textContent || '').toLowerCase().indexOf(q) >= 0;
+          const selfMatch = navMatch(el.textContent || '', forceShow);
           const show = !q || selfMatch;
           el.hidden = !show;
           if (show) {
@@ -1283,7 +1945,6 @@
           el.classList.contains('err') ||
           el.classList.contains('smart-snip')
         ) {
-          // Status / loading lines: hide while filtering unless forcing a branch
           el.hidden = !!q && !forceShow;
         }
       }
@@ -1298,12 +1959,12 @@
         if (c.classList.contains('nav-item-row')) row = c;
         else if (c.classList.contains('nav-kids')) kids = c;
       });
-      const name = (entry.getAttribute(nameAttr) || (row && rowLabel(row)) || '').toLowerCase();
-      const selfMatch = !q || name.indexOf(q) >= 0;
+      const name = entry.getAttribute(nameAttr) || (row && rowLabel(row)) || '';
+      const selfMatch = navMatch(name, false);
       const childMatch = filterKids(kids, selfMatch);
       const show = !q || selfMatch || childMatch;
       entry.hidden = !show;
-      if (row) row.hidden = false; // entry hide covers the row
+      if (row) row.hidden = false;
       if (show) shown++;
     }
 
@@ -1332,6 +1993,8 @@
     input.dataset.wired = '1';
     input.addEventListener('input', function () {
       nav.poolFilter = input.value;
+      saveStored('zfstool.nav.poolFilter', nav.poolFilter);
+      saveFilterValue('nav.sidebar', nav.poolFilter);
       applyNavPoolFilter();
     });
   }
@@ -1760,10 +2423,17 @@
   }
 
   async function renderHome() {
-    renderBreadcrumbs(null);
+    renderBreadcrumbs([{ label: 'Overview', hash: null }]);
     appEl.innerHTML = '<p class="loading">Loading…</p>';
     try {
-      const [pools, disks, host] = await Promise.all([getPools(), getDisks(), getHost()]);
+      const [pools, disks, host, mounts] = await Promise.all([
+        getPools(),
+        getDisks(),
+        getHost(),
+        getMounts().catch(function () {
+          return [];
+        }),
+      ]);
       const poolRows = pools
         .map(function (p) {
           const usedPct = p.size > 0 ? Math.round((100 * p.allocated) / p.size) : 0;
@@ -1784,7 +2454,19 @@
         .join('');
       const diskRows = disks
         .map(function (d) {
-          const poolsHtml = (d.pools || [])
+          const seenPools = {};
+          const poolsHtml = []
+            .concat(d.pools || [])
+            .concat(
+              (d.children || []).reduce(function (acc, c) {
+                return acc.concat(c.pools || []);
+              }, [])
+            )
+            .filter(function (m) {
+              if (!m || !m.pool || seenPools[m.pool]) return false;
+              seenPools[m.pool] = true;
+              return true;
+            })
             .map(function (m) {
               return poolLink(m.pool);
             })
@@ -1792,18 +2474,50 @@
           return (
             '<tr><td>' +
             diskLink(d.device) +
+            mediaTagHtml(d.media) +
             '</td><td class="mono small">' +
             esc(d.device) +
+            '</td><td>' +
+            (mediaLabel(d.media) || '—') +
+            '</td><td class="mono">' +
+            (d.size ? fmtBytes(d.size) : '—') +
             '</td><td>' +
             (poolsHtml || '—') +
             '</td></tr>'
           );
         })
         .join('');
+      const diskBars = disks
+        .map(function (d) {
+          return '<div class="disk-bar-block">' + diskPartitionBarHtml(d) + '</div>';
+        })
+        .join('');
+      const volPreview = (mounts || [])
+        .slice(0, 8)
+        .map(function (m) {
+          const src =
+            m.source && String(m.source).indexOf('/dev/') === 0
+              ? diskLink(m.source)
+              : m.fstype === 'zfs'
+                ? dsLink(m.source)
+                : '<span class="mono">' + esc(m.source) + '</span>';
+          return (
+            '<tr><td class="mono">' +
+            esc(m.target) +
+            '</td><td>' +
+            src +
+            '</td><td>' +
+            esc(m.fstype || '—') +
+            '</td><td class="mono">' +
+            (m.size ? fmtBytes(m.used) + ' / ' + fmtBytes(m.size) : '—') +
+            '</td></tr>'
+          );
+        })
+        .join('');
       appEl.innerHTML =
         '<h2 class="page-title">Overview</h2>' +
-        '<p class="lede">Dense inventory of pools and disks. Use the left nav to keep both lists open; ' +
-        'links jump between matching resources.</p>' +
+        '<p class="lede">Pools, disks, partitions, and mounted volumes — ZFS and otherwise. ' +
+        'Use the left nav to keep lists open; links jump between matching resources.</p>' +
         '<div class="panel">' +
         '<div class="stat-row">' +
         '<span><span class="k">Host</span><a href="#/host">' +
@@ -1815,6 +2529,9 @@
         '<span><span class="k">Disks</span>' +
         disks.length +
         '</span>' +
+        '<span><span class="k">Volumes</span><a href="#/volumes">' +
+        (mounts || []).length +
+        '</a></span>' +
         '<span><span class="k">Uptime</span>' +
         esc(fmtUptime(host.uptimeSeconds)) +
         '</span>' +
@@ -1824,8 +2541,13 @@
         (poolRows || '<tr><td colspan="5" class="muted">None</td></tr>') +
         '</tbody></table></div>' +
         '<h3 class="sub">Disks</h3>' +
-        '<div class="table-wrap"><table><thead><tr><th>Disk</th><th>Path</th><th>Pools</th></tr></thead><tbody>' +
-        (diskRows || '<tr><td colspan="3" class="muted">None</td></tr>') +
+        diskBars +
+        '<div class="table-wrap"><table><thead><tr><th>Disk</th><th>Path</th><th>Media</th><th>Size</th><th>Pools</th></tr></thead><tbody>' +
+        (diskRows || '<tr><td colspan="5" class="muted">None</td></tr>') +
+        '</tbody></table></div>' +
+        '<h3 class="sub">Volumes <a href="#/volumes" class="small">all →</a></h3>' +
+        '<div class="table-wrap"><table><thead><tr><th>Mount</th><th>Source</th><th>Type</th><th>Used / Size</th></tr></thead><tbody>' +
+        (volPreview || '<tr><td colspan="4" class="muted">None</td></tr>') +
         '</tbody></table></div>';
     } catch (e) {
       appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
@@ -1879,6 +2601,7 @@
               ['ZFS', ''],
               ['Server', h.agentVersion || '—'],
               ['Collected', h.collectedAt || '—'],
+              ['Volumes', ''],
             ],
             false
           ).replace(
@@ -1887,6 +2610,10 @@
               zfs +
               (h.zfsMismatch ? '<br><span class="err">user/kernel mismatch</span>' : '') +
               '</dd>'
+          )
+          .replace(
+            '<dt>Volumes</dt><dd></dd>',
+            '<dt>Volumes</dt><dd><a href="#/volumes">Mounted filesystems (/, /boot, ZFS, …)</a></dd>'
           ) +
           '</div>' +
           arcBlock;
@@ -1961,20 +2688,18 @@
   /** Options for zfs diff "to": live filesystem of the from-snap, then sibling snapshots. */
   function diffToOptionsHtml(fromSnap, snapshots, filterQ) {
     const ds = snapshotDatasetName(fromSnap);
-    const q = String(filterQ || '')
-      .trim()
-      .toLowerCase();
+    const q = String(filterQ || '').trim();
     const opts = [];
     if (ds) {
       const liveLabel = ds + ' (live)';
-      if (!q || liveLabel.toLowerCase().indexOf(q) >= 0) {
+      if (!q || textMatchesFilter(liveLabel, q)) {
         opts.push({ value: ds, label: liveLabel });
       }
     }
     snapshots.forEach(function (n) {
       if (n === fromSnap) return;
       if (ds && snapshotDatasetName(n) !== ds) return;
-      if (q && String(n).toLowerCase().indexOf(q) < 0) return;
+      if (q && !textMatchesFilter(String(n), q)) return;
       opts.push({ value: n, label: n });
     });
     if (!opts.length) {
@@ -2007,12 +2732,10 @@
   }
 
   function filterSnapshotNames(snapshots, query) {
-    const q = String(query || '')
-      .trim()
-      .toLowerCase();
+    const q = String(query || '').trim();
     if (!q) return snapshots.slice();
     return snapshots.filter(function (n) {
-      return String(n).toLowerCase().indexOf(q) >= 0;
+      return textMatchesFilter(String(n), q);
     });
   }
 
@@ -2193,6 +2916,7 @@
           '</div>' +
           scanLine +
           '</div>' +
+          datasetUsageBarHtml(poolName, datasets, sum) +
           '<div class="table-wrap"><table class="tree-table"><thead><tr><th>Name</th><th>State</th><th>R</th><th>W</th><th>C</th></tr></thead><tbody>' +
           treeRows +
           '</tbody></table></div>';
@@ -2207,6 +2931,7 @@
           return d.type === 'snapshot';
         });
         body =
+          datasetUsageBarHtml(poolName, datasets, sum) +
           '<h3 class="sub">Filesystems (' +
           filesystems.length +
           ')</h3>' +
@@ -2469,9 +3194,17 @@
         }
 
         if (fromEl && toEl && filterEl) {
+          const diffKey = 'diff.' + poolName;
+          const savedDiff = loadFiltersMap()[diffKey];
+          if (savedDiff) {
+            filterEl.value = savedDiff;
+            const shown = rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value);
+            updateFilterCount(shown);
+          }
           filterEl.addEventListener('input', function () {
             const shown = rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value);
             updateFilterCount(shown);
+            saveFilterValue(diffKey, filterEl.value);
           });
           fromEl.onchange = function () {
             rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value, fromEl.value, toEl.value);
@@ -2572,22 +3305,35 @@
   }
 
   async function renderDisk(devPath) {
-    renderBreadcrumbs([
-      { label: 'Overview', hash: '/' },
-      { label: shortDev(devPath), hash: null },
-    ]);
     appEl.innerHTML = '<p class="loading">Loading disk…</p>';
     try {
       const disks = await getDisks();
-      const hit = disks.find(function (d) {
-        return d.device === devPath;
-      });
-      const smart = await ensureDiskSmart(devPath);
+      const node = findDiskNode(disks, devPath);
+      const hit = node && node.disk;
+      const parentDisk = node && node.parent ? node.parent : hit;
+      const crumbs = [{ label: 'Overview', hash: '/' }, { label: 'Disks', hash: '/' }];
+      if (parentDisk && hit && parentDisk.device !== hit.device) {
+        crumbs.push({ label: shortDev(parentDisk.device), hash: '/disk/' + encSeg(parentDisk.device) });
+        crumbs.push({ label: shortDev(hit.device || devPath), hash: null });
+      } else {
+        crumbs.push({ label: shortDev((hit && hit.device) || devPath), hash: null });
+      }
+      renderBreadcrumbs(crumbs);
+
+      const smartDev = (parentDisk && parentDisk.device) || (hit && hit.device) || devPath;
+      const smart = await ensureDiskSmart(smartDev);
       const sj = smart && smart.json;
       const hasJson = sj && typeof sj === 'object' && Object.keys(sj).length > 0;
+      const d = hit || { device: devPath, pools: [] };
 
+      const members = []
+        .concat(d.pools || [])
+        .concat(
+          (d.children || []).reduce(function (acc, c) {
+            return acc.concat(c.pools || []);
+          }, [])
+        );
       let membership = '';
-      const members = (hit && hit.pools) || [];
       if (members.length) {
         membership =
           '<h3 class="sub">In pools</h3><div class="table-wrap"><table><thead><tr><th>Pool</th><th>State</th><th>Path</th></tr></thead><tbody>' +
@@ -2605,8 +3351,36 @@
             })
             .join('') +
           '</tbody></table></div>';
-      } else {
-        membership = '<p class="muted">Not found in current pool configs.</p>';
+      }
+
+      const barDisk = parentDisk || d;
+      const partBar = diskPartitionBarHtml(barDisk, d.device);
+
+      let partTable = '';
+      const kids = d.children && d.children.length ? d.children : parentDisk && parentDisk.children;
+      if (kids && kids.length) {
+        partTable =
+          '<h3 class="sub">Partitions</h3><div class="table-wrap"><table><thead><tr><th>Device</th><th>Size</th><th>Type</th><th>FS</th><th>Mount</th><th>Label</th></tr></thead><tbody>' +
+          kids
+            .map(function (p) {
+              return (
+                '<tr><td>' +
+                diskLink(p.device) +
+                '</td><td class="mono">' +
+                (p.size ? fmtBytes(p.size) : '—') +
+                '</td><td>' +
+                esc(p.type || '—') +
+                '</td><td>' +
+                esc(p.fstype || '—') +
+                '</td><td class="mono">' +
+                esc(p.mountpoint || '—') +
+                '</td><td>' +
+                esc(p.label || p.partLabel || '—') +
+                '</td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table></div>';
       }
 
       let smartBlock = '';
@@ -2629,29 +3403,62 @@
         smartBlock = '<h3 class="sub">SMART</h3><p class="muted">No SMART data.</p>';
       }
 
+      const kvRows = [
+        ['Device', ''],
+        ['Path', d.device || devPath],
+        ['Media', mediaLabel(d.media) || mediaLabel(barDisk && barDisk.media) || '—'],
+        ['Type', d.type || '—'],
+        ['Size', d.size ? fmtBytes(d.size) : '—'],
+        ['Model', d.model || (barDisk && barDisk.model) || '—'],
+        ['Serial', d.serial || (barDisk && barDisk.serial) || '—'],
+        ['Transport', d.transport || (barDisk && barDisk.transport) || '—'],
+        ['Filesystem', d.fstype || '—'],
+        ['Mount', d.mountpoint || '—'],
+        ['Label', d.label || d.partLabel || '—'],
+        ['UUID', d.uuid || '—'],
+      ];
+      if (parentDisk && parentDisk.device !== d.device) {
+        kvRows.splice(2, 0, ['Parent', '']);
+      }
+
+      let kvHtml = renderKV(kvRows, false)
+        .replace(
+          '<dt>Device</dt><dd></dd>',
+          '<dt>Device</dt><dd><a href="' +
+            esc(diskHref(d.device || devPath)) +
+            '">' +
+            esc(d.device || devPath) +
+            '</a>' +
+            mediaTagHtml(d.media || (barDisk && barDisk.media)) +
+            '</dd>'
+        );
+      if (parentDisk && parentDisk.device !== d.device) {
+        kvHtml = kvHtml.replace(
+          '<dt>Parent</dt><dd></dd>',
+          '<dt>Parent</dt><dd>' + diskLink(parentDisk.device) + '</dd>'
+        );
+      }
+
       appEl.innerHTML =
         '<h2 class="page-title">' +
-        esc(shortDev(devPath)) +
+        esc(shortDev(d.device || devPath)) +
+        mediaTagHtml(d.media || (barDisk && barDisk.media)) +
         '</h2>' +
         '<div class="panel">' +
-        renderKV(
-          [
-            ['Device', ''],
-            ['Path', devPath],
-          ],
-          false
-        ).replace(
-          '<dt>Device</dt><dd></dd>',
-          '<dt>Device</dt><dd><a href="' + esc(diskHref(devPath)) + '">' + esc(devPath) + '</a></dd>'
-        ) +
+        kvHtml +
         '</div>' +
+        partBar +
+        partTable +
         membership +
         smartBlock;
 
-      // Keep sidebar disk expanded when viewing
-      nav.diskKids[devPath] = true;
+      nav.diskKids[smartDev] = true;
       nav.disksOpen = true;
     } catch (e) {
+      renderBreadcrumbs([
+        { label: 'Overview', hash: '/' },
+        { label: shortDev(devPath), hash: null },
+      ]);
       appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
   }
@@ -2699,7 +3506,7 @@
       const data = await j('/v1/datasets/properties?name=' + encSeg(dsName));
       const props = data.properties || {};
       const isSnap = (props.type || kind) === 'snapshot' || dsName.indexOf('@') >= 0;
-      const [holds, allow] = await Promise.all([
+      const [holds, allow, poolRows] = await Promise.all([
         isSnap
           ? j('/v1/snapshots/holds?snapshot=' + encSeg(dsName)).catch(function () {
               return null;
@@ -2707,6 +3514,9 @@
           : Promise.resolve(null),
         j('/v1/zfs-allow?dataset=' + encSeg(dsName.split('@')[0])).catch(function () {
           return null;
+        }),
+        j('/v1/datasets?pool=' + encSeg(poolName)).catch(function () {
+          return [];
         }),
       ]);
 
@@ -2786,6 +3596,12 @@
           '</span> — dataset properties below.</p>'
         : '';
 
+      const spaceBar = datasetUsageBarHtml(
+        dsName.indexOf('@') >= 0 ? dsName.split('@')[0] : dsName,
+        poolRows || [],
+        null
+      );
+
       detailEl.innerHTML =
         '<h2 class="page-title">' +
         esc(dsName) +
@@ -2803,6 +3619,7 @@
           : '') +
         (props.origin ? '<span><span class="k">Origin</span>' + dsLink(props.origin) + '</span>' : '') +
         '</div></div>' +
+        spaceBar +
         '<div class="panel">' +
         renderKV(priority.concat(rest), true) +
         '</div>' +
@@ -2810,6 +3627,75 @@
         allowBlock;
     } catch (e) {
       detailEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+    }
+  }
+
+  async function renderVolumes() {
+    renderBreadcrumbs([
+      { label: 'Overview', hash: '/' },
+      { label: 'Volumes', hash: null },
+    ]);
+    appEl.innerHTML = '<p class="loading">Loading volumes…</p>';
+    try {
+      const [mounts, disks] = await Promise.all([
+        getMounts(true),
+        getDisks(),
+      ]);
+      const bars = (mounts || [])
+        .map(function (m) {
+          return mountBarHtml(m);
+        })
+        .join('');
+      const rows = (mounts || [])
+        .map(function (m) {
+          let src;
+          if (m.source && String(m.source).indexOf('/dev/') === 0) {
+            src = diskLink(m.source);
+          } else if (m.fstype === 'zfs') {
+            src = dsLink(m.source);
+          } else {
+            src = '<span class="mono">' + esc(m.source || '—') + '</span>';
+          }
+          const pct =
+            m.size > 0 ? Math.round((100 * (m.used || 0)) / m.size) : 0;
+          return (
+            '<tr><td class="mono">' +
+            esc(m.target) +
+            '</td><td>' +
+            src +
+            '</td><td>' +
+            esc(m.fstype || '—') +
+            '</td><td class="mono">' +
+            (m.size ? fmtBytes(m.used) : '—') +
+            '</td><td class="mono">' +
+            (m.size ? fmtBytes(m.size) : '—') +
+            '</td><td class="mono">' +
+            (m.size ? pct + '%' : '—') +
+            '</td><td>' +
+            esc(m.label || '—') +
+            '</td></tr>'
+          );
+        })
+        .join('');
+      const diskBars = (disks || [])
+        .map(function (d) {
+          return '<div class="disk-bar-block">' + diskPartitionBarHtml(d) + '</div>';
+        })
+        .join('');
+      appEl.innerHTML =
+        '<h2 class="page-title">Volumes</h2>' +
+        '<p class="lede">Mounted filesystems on this host, including non-ZFS volumes such as <span class="mono">/</span> and <span class="mono">/boot</span>. Click a partition or disk bar to open its detail page.</p>' +
+        '<h3 class="sub">Disks</h3>' +
+        diskBars +
+        bars +
+        '<h3 class="sub">Mounts (' +
+        (mounts || []).length +
+        ')</h3>' +
+        '<div class="table-wrap"><table><thead><tr><th>Mount</th><th>Source</th><th>Type</th><th>Used</th><th>Size</th><th>%</th><th>Label</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="7" class="muted">None</td></tr>') +
+        '</tbody></table></div>';
+    } catch (e) {
+      appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
   }
 
@@ -2826,6 +3712,10 @@
       case 'remote':
         clearSplitView();
         await renderRemote();
+        break;
+      case 'volumes':
+        clearSplitView();
+        await renderVolumes();
         break;
       case 'pool':
         await renderPool(r.parts[0]);
@@ -2855,6 +3745,7 @@
   }
 
   function dispatch() {
+    noteViewVisit(currentHash());
     navigateRoute(parseRoute()).catch(function (err) {
       if (typeof console !== 'undefined' && console.error) console.error(err);
     });
@@ -2872,6 +3763,7 @@
     poolsCache = null;
     disksCache = null;
     hostCache = null;
+    mountsCache = null;
     nav.smart = {};
     sidebarBuiltFor = '';
     try {
@@ -2898,6 +3790,11 @@
   }
 
   window.addEventListener('hashchange', dispatch);
+  if (crumbBackBtn) {
+    crumbBackBtn.addEventListener('click', function () {
+      goViewBack();
+    });
+  }
   dispatch();
 
   (function initSidebarResize() {
@@ -3003,6 +3900,11 @@
       if (e.key === 'F5') {
         e.preventDefault();
         refreshCurrentView();
+        return;
+      }
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'Left')) {
+        e.preventDefault();
+        goViewBack();
         return;
       }
       if (

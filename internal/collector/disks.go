@@ -1,51 +1,6 @@
 package collector
 
-import (
-	"context"
-	"sort"
-
-	"github.com/nixomose/zfstool/internal/api"
-)
-
-// ListDisks aggregates unique block devices from all pool status trees.
-func ListDisks(ctx context.Context) ([]api.DiskSummary, error) {
-	pools, err := ListPools(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byDev := map[string]*api.DiskSummary{}
-	for _, p := range pools {
-		st, err := PoolStatusFull(ctx, p.Name)
-		if err != nil {
-			continue
-		}
-		enriched := enrichStatusLines(st.Config, p.Name)
-		for _, ln := range enriched {
-			if !ln.isDisk {
-				continue
-			}
-			path := normalizeDiskPath(ln.name)
-			d, ok := byDev[path]
-			if !ok {
-				d = &api.DiskSummary{Device: path}
-				byDev[path] = d
-			}
-			d.Pools = append(d.Pools, api.DiskMembership{
-				Pool:  p.Name,
-				State: ln.state,
-				Path:  ln.vdevPath,
-			})
-		}
-	}
-	out := make([]api.DiskSummary, 0, len(byDev))
-	for _, d := range byDev {
-		out = append(out, *d)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Device < out[j].Device
-	})
-	return out, nil
-}
+import "github.com/nixomose/zfstool/internal/api"
 
 type statusLineEx struct {
 	name     string

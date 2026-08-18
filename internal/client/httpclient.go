@@ -168,11 +168,20 @@ func (c *HTTPClient) ListDatasets(ctx context.Context, pool string) ([]api.Datas
 	return rows, nil
 }
 
-// ListDisks fetches aggregated block devices across pools.
+// ListDisks fetches block devices (all disks, with partitions and pool membership).
 func (c *HTTPClient) ListDisks(ctx context.Context) ([]api.DiskSummary, error) {
 	var disks []api.DiskSummary
 	if err := c.get(ctx, "/v1/disks", &disks); err != nil {
 		return nil, err
 	}
 	return disks, nil
+}
+
+// ListMounts fetches mounted filesystems including non-ZFS volumes.
+func (c *HTTPClient) ListMounts(ctx context.Context) ([]api.MountEntry, error) {
+	var mounts []api.MountEntry
+	if err := c.get(ctx, "/v1/mounts", &mounts); err != nil {
+		return nil, err
+	}
+	return mounts, nil
 }

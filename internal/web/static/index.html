@@ -24,6 +24,18 @@
       --err: #c97a7a;
       --health-ok: #8faa8a;
       --sidebar-w: 320px;
+      --seg-dataset: #b8956c;
+      --seg-snap: #8b7bb0;
+      --seg-data: #6b8cae;
+      --seg-free: #2a303a;
+      --seg-zfs: #c4a35a;
+      --seg-ext: #5a8f6d;
+      --seg-vfat: #7a9bb8;
+      --seg-swap: #8a6a7a;
+      --seg-lvm: #6a8a7a;
+      --seg-part: #7d8fa3;
+      --seg-unalloc: #1a1d22;
+      --seg-other: #6e7a6a;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -316,16 +328,182 @@
     .btn-exit[hidden] { display: none !important; }
     #crumb {
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
       padding: 0.28rem 0.75rem;
       font-size: 0.72rem;
       color: var(--text-secondary);
       border-bottom: 1px solid var(--border);
       background: var(--bg);
+      min-height: 1.85rem;
     }
     #crumb.crumb--hidden { display: none; }
+    #crumb-path {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .crumb-back {
+      flex-shrink: 0;
+      padding: 0.12rem 0.45rem;
+      font-family: inherit;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .crumb-back:hover:not(:disabled) {
+      color: var(--heading);
+      border-color: var(--border-accent);
+      background: var(--surface-hover);
+    }
+    .crumb-back:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
     .crumb-link { color: var(--link); }
     .crumb-here { color: var(--text); font-weight: 500; }
     .crumb-sep { color: var(--border-accent); margin: 0 0.12em; }
+    .tag-media {
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .tag-ssd { color: #9eb6d0; border-color: rgba(158, 182, 208, 0.35); }
+    .tag-hdd { color: #c4a35a; border-color: rgba(196, 163, 90, 0.4); }
+    .usage-bar-wrap { margin: 0.35rem 0 0.55rem; }
+    .usage-bar {
+      display: flex;
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      background: var(--bg);
+      min-width: 0;
+    }
+    .usage-bar .seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 3px;
+      overflow: hidden;
+      font-size: 0.62rem;
+      font-weight: 500;
+      color: var(--bg);
+      text-decoration: none;
+      border-right: 1px solid rgba(0, 0, 0, 0.28);
+      white-space: nowrap;
+      padding: 0 0.2rem;
+      box-sizing: border-box;
+    }
+    .usage-bar .seg:last-child { border-right: 0; }
+    .usage-bar a.seg:hover {
+      filter: brightness(1.12);
+      text-decoration: none;
+      color: var(--bg);
+    }
+    .usage-bar .seg.is-free,
+    .usage-bar .seg.is-unalloc {
+      color: var(--text-secondary);
+    }
+    .usage-bar .seg.kind-dataset,
+    .usage-swatch.kind-dataset { background: var(--seg-dataset); }
+    .usage-bar .seg.kind-snap,
+    .usage-swatch.kind-snap { background: var(--seg-snap); }
+    .usage-bar .seg.kind-data,
+    .usage-swatch.kind-data { background: var(--seg-data); }
+    .usage-bar .seg.kind-free,
+    .usage-bar .seg.is-free,
+    .usage-swatch.kind-free { background: var(--seg-free); }
+    .usage-bar .seg.kind-zfs,
+    .usage-swatch.kind-zfs { background: var(--seg-zfs); }
+    .usage-bar .seg.kind-ext,
+    .usage-bar .seg.kind-xfs,
+    .usage-bar .seg.kind-btrfs,
+    .usage-swatch.kind-ext,
+    .usage-swatch.kind-xfs,
+    .usage-swatch.kind-btrfs { background: var(--seg-ext); }
+    .usage-bar .seg.kind-vfat,
+    .usage-bar .seg.kind-fat,
+    .usage-bar .seg.kind-efi,
+    .usage-swatch.kind-vfat,
+    .usage-swatch.kind-fat,
+    .usage-swatch.kind-efi { background: var(--seg-vfat); }
+    .usage-bar .seg.kind-swap,
+    .usage-swatch.kind-swap { background: var(--seg-swap); }
+    .usage-bar .seg.kind-lvm,
+    .usage-bar .seg.kind-crypt,
+    .usage-swatch.kind-lvm,
+    .usage-swatch.kind-crypt { background: var(--seg-lvm); }
+    .usage-bar .seg.kind-part,
+    .usage-swatch.kind-part { background: var(--seg-part); }
+    .usage-bar .seg.kind-unalloc,
+    .usage-bar .seg.is-unalloc,
+    .usage-swatch.kind-unalloc { background: var(--seg-unalloc); }
+    .usage-bar .seg.kind-other,
+    .usage-swatch.kind-other { background: var(--seg-other); }
+    .usage-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 0.7rem;
+      margin: 0.28rem 0 0;
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+    }
+    .usage-legend a { color: var(--link); }
+    .usage-swatch {
+      display: inline-block;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 1px;
+      margin-right: 0.25rem;
+      vertical-align: -1px;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+    }
+    .usage-bar-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin: 0 0 0.2rem;
+    }
+    .disk-bar-block { margin: 0 0 0.65rem; }
+    .col-resizer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      user-select: none;
+      z-index: 2;
+    }
+    .col-resizer:hover,
+    body.is-resizing-col .col-resizer {
+      background: var(--accent);
+      opacity: 0.55;
+    }
+    body.is-resizing-col,
+    body.is-resizing-col * {
+      cursor: col-resize !important;
+      user-select: none !important;
+    }
+    table.cols-resized {
+      table-layout: fixed;
+    }
+    table.cols-resized th,
+    table.cols-resized td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     #app {
       flex: 1;
       overflow: auto;
@@ -531,6 +709,7 @@
       text-transform: uppercase;
       background: var(--bg-elevated);
       white-space: nowrap;
+      position: relative;
     }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(158, 182, 208, 0.03); }
@@ -709,7 +888,10 @@
         <div class="topbar-meta" id="topbar-meta">Read-only ZFS inventory</div>
         <button type="button" class="btn-exit" id="btn-native-exit" hidden>Exit</button>
       </div>
-      <nav id="crumb" class="crumb--hidden" aria-label="Breadcrumb"></nav>
+      <nav id="crumb" aria-label="Breadcrumb">
+        <button type="button" class="crumb-back" id="crumb-back" disabled title="Previous view">Back</button>
+        <span id="crumb-path"></span>
+      </nav>
       <main id="app"></main>
     </div>
   </div>
