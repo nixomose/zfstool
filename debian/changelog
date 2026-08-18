@@ -1,3 +1,12 @@
+zfstool (0.2.5-1) unstable; urgency=medium
+
+  * Breadcrumbs plus Back (previous view); SSD/HDD media type on disks.
+  * GParted-style clickable disk/partition maps and dataset/snapshot usage bars.
+  * Volumes page for non-ZFS mounts (/, /boot, and other filesystems).
+  * Resizable table columns; filters support comma OR, !exclude, and persist.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 18 Aug 2026 20:17:00 +0000
+
 zfstool (0.2.4-1) unstable; urgency=medium
 
   * Split main view: browse pane (datasets/snapshots/files) beside ZFS detail.
