@@ -100,6 +100,7 @@ zfstool help
 
 - **F5** — refresh the current view (scroll position preserved where possible).
 - **Back** (breadcrumb bar) / **Alt+Left** — return to the previous view.
+- **Ctrl++** / **Ctrl+-** — increase or decrease UI font size (**Ctrl+0** resets). Size is kept across reloads.
 - **Ctrl+Q** / **Ctrl+W** — close the **native** window only (when the WebView binding is present).
 - List filters accept comma-separated terms and `!exclude` (state is kept in the browser).
 

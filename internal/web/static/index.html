@@ -36,15 +36,17 @@
       --seg-part: #7d8fa3;
       --seg-unalloc: #1a1d22;
       --seg-other: #6e7a6a;
+      --ui-zoom: 1;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
+    html { font-size: calc(16px * var(--ui-zoom, 1)); }
     body {
       font-family: "IBM Plex Sans", system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.4;
-      font-size: 13px;
+      font-size: calc(13px * var(--ui-zoom, 1));
     }
     a { color: var(--link); text-decoration: none; }
     a:hover { color: var(--link-hover); text-decoration: underline; }
@@ -863,6 +865,14 @@
       #app { overflow: visible; }
     }
   </style>
+  <script>
+    try {
+      var z = parseFloat(localStorage.getItem('zfstool.uiZoom'));
+      if (isFinite(z) && z >= 0.7 && z <= 2) {
+        document.documentElement.style.setProperty('--ui-zoom', String(z));
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body data-github-repo="https://github.com/nixomose/zfstool">
   <div class="shell">

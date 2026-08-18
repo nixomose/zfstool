@@ -3894,6 +3894,33 @@
     });
   })();
 
+  const UI_ZOOM_MIN = 0.7;
+  const UI_ZOOM_MAX = 2;
+  const UI_ZOOM_STEP = 0.1;
+  const UI_ZOOM_KEY = 'zfstool.uiZoom';
+
+  function currentUiZoom() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom');
+    const n = parseFloat(raw);
+    return isFinite(n) && n > 0 ? n : 1;
+  }
+
+  function setUiZoom(z) {
+    let n = Math.round(Number(z) * 10) / 10;
+    if (!isFinite(n)) n = 1;
+    if (n < UI_ZOOM_MIN) n = UI_ZOOM_MIN;
+    if (n > UI_ZOOM_MAX) n = UI_ZOOM_MAX;
+    document.documentElement.style.setProperty('--ui-zoom', String(n));
+    try {
+      if (n === 1) localStorage.removeItem(UI_ZOOM_KEY);
+      else localStorage.setItem(UI_ZOOM_KEY, String(n));
+    } catch (_) {}
+  }
+
+  function bumpUiZoom(dir) {
+    setUiZoom(currentUiZoom() + (dir > 0 ? UI_ZOOM_STEP : -UI_ZOOM_STEP));
+  }
+
   document.addEventListener(
     'keydown',
     function (e) {
@@ -3906,6 +3933,25 @@
         e.preventDefault();
         goViewBack();
         return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        const code = e.code || '';
+        const key = e.key || '';
+        if (code === 'Equal' || code === 'NumpadAdd' || key === '+' || key === '=') {
+          e.preventDefault();
+          bumpUiZoom(1);
+          return;
+        }
+        if (code === 'Minus' || code === 'NumpadSubtract' || key === '-' || key === '_') {
+          e.preventDefault();
+          bumpUiZoom(-1);
+          return;
+        }
+        if (!e.shiftKey && (code === 'Digit0' || code === 'Numpad0' || key === '0')) {
+          e.preventDefault();
+          setUiZoom(1);
+          return;
+        }
       }
       if (
         e.ctrlKey &&
