@@ -1,3 +1,10 @@
+zfstool (0.2.6-1) unstable; urgency=medium
+
+  * make build installs GTK 3 and WebKit2GTK 4.1 dev packages when pkg-config
+    cannot find them (same as make deps).
+
+ -- nixomose <nixomose@gmail.com>  Tue, 18 Aug 2026 20:25:49 +0000
+
 zfstool (0.2.5-1) unstable; urgency=medium
 
   * Breadcrumbs plus Back (previous view); SSD/HDD media type on disks.
