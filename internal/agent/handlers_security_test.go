@@ -37,6 +37,33 @@ func TestSmartAllowsShortName(t *testing.T) {
 	}
 }
 
+func TestBrowseRequiresDatasetOrMount(t *testing.T) {
+	s := NewServer()
+	req := httptest.NewRequest("GET", "/v1/browse", nil)
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestBrowseMountRejectsRelative(t *testing.T) {
+	s := NewServer()
+	cases := []string{
+		"/v1/browse?mount=etc",
+		"/v1/browse?mount=..%2F..%2Fetc",
+		"/v1/browse?dataset=tank&mount=/boot",
+	}
+	for _, path := range cases {
+		req := httptest.NewRequest("GET", path, nil)
+		rr := httptest.NewRecorder()
+		s.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("%s: got %d %s", path, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestPoolStatusRejectsFlagInjection(t *testing.T) {
 	s := NewServer()
 	req := httptest.NewRequest("GET", "/v1/pools/-c,iostat-10s/status", nil)

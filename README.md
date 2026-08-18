@@ -10,7 +10,7 @@ The default command opens a **desktop UI** (native **WebKit** window on Linux wh
 
 ## What it does
 
-- **GUI / web UI:** Browse storage pools, drill down into vdevs and disks, view dataset and zvol properties, and open SMART details where `smartctl` is available. Partition maps, mounted volumes (`/`, `/boot`, …), and dataset usage bars are included even when they are not ZFS.
+- **GUI / web UI:** Browse storage pools, drill down into vdevs and disks, view dataset and zvol properties, and open SMART details where `smartctl` is available. Partition maps, mounted volumes (`/`, `/boot`, ext4, EFI, …), directory browsing on those volumes, and dataset usage bars are included even when they are not ZFS.
 - **API server:** Serves a JSON HTTP API over a **Unix domain socket** (and optionally TCP) for the UI and for tools that speak HTTP.
 - **Host view:** OS, kernel, memory, ZFS versions, ARC stats, disks (SSD vs HDD), and mounts.
 
@@ -164,6 +164,7 @@ The API server exposes **`GET`** (and selected **`POST`**) routes under **`/v1/`
 - `/v1/pools/{pool}/history`, `/maintenance`, `/properties`, `/devices`
 - `/v1/bookmarks`, `/v1/snapshots/holds`, `/v1/iostat`, `/v1/graph`, `/v1/kernel-log`, `/v1/module-params`, `/v1/zfs-allow`
 - `GET /v1/browse?dataset=&path=` — list files/dirs under a filesystem or snapshot mount (confined)
+- `GET /v1/browse?mount=&path=` — same, confined to a mounted filesystem from `/v1/mounts` (`dataset` and `mount` are mutually exclusive)
 - `POST /v1/zfs-diff` — `{ "from", "to" }`
 
 The UI and `zfstool web` proxy this tree to the API server socket or TCP backend.

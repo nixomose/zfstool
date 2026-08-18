@@ -26,6 +26,66 @@ func BrowseDir(ctx context.Context, dataset, relPath string) (*api.BrowseResult,
 	if err != nil {
 		return nil, err
 	}
+	out, err := listDirConfined(root, relPath)
+	if err != nil {
+		return nil, err
+	}
+	out.Dataset = dataset
+	return out, nil
+}
+
+// BrowseMount lists files under a mounted filesystem from ListMounts, confined to that mount.
+func BrowseMount(ctx context.Context, mount, relPath string) (*api.BrowseResult, error) {
+	cleaned, err := normalizeMountTarget(mount)
+	if err != nil {
+		return nil, err
+	}
+	mounts, err := ListMounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hit := lookupMount(cleaned, mounts)
+	if hit == nil {
+		return nil, fmt.Errorf("%w: not a mounted filesystem", ErrInvalidBrowse)
+	}
+	out, err := listDirConfined(hit.Target, relPath)
+	if err != nil {
+		return nil, err
+	}
+	out.Mount = hit.Target
+	return out, nil
+}
+
+func normalizeMountTarget(mount string) (string, error) {
+	mount = strings.TrimSpace(mount)
+	if mount == "" || strings.ContainsRune(mount, 0) {
+		return "", fmt.Errorf("%w: empty mount", ErrInvalidBrowse)
+	}
+	if strings.ContainsAny(mount, "\n\r") {
+		return "", fmt.Errorf("%w: control characters", ErrInvalidBrowse)
+	}
+	if !strings.HasPrefix(mount, "/") {
+		return "", fmt.Errorf("%w: mount must be absolute", ErrInvalidBrowse)
+	}
+	cleaned := filepath.Clean(mount)
+	if !filepath.IsAbs(cleaned) || !strings.HasPrefix(cleaned, "/") {
+		return "", fmt.Errorf("%w: mount must be absolute", ErrInvalidBrowse)
+	}
+	return cleaned, nil
+}
+
+func lookupMount(target string, mounts []api.MountEntry) *api.MountEntry {
+	want := filepath.Clean(target)
+	for i := range mounts {
+		if filepath.Clean(mounts[i].Target) == want {
+			m := mounts[i]
+			return &m
+		}
+	}
+	return nil
+}
+
+func listDirConfined(root, relPath string) (*api.BrowseResult, error) {
 	full, err := confinedJoin(root, relPath)
 	if err != nil {
 		return nil, err
@@ -43,9 +103,8 @@ func BrowseDir(ctx context.Context, dataset, relPath string) (*api.BrowseResult,
 		return nil, err
 	}
 	out := &api.BrowseResult{
-		Dataset: dataset,
-		Path:    normalizeRel(relPath),
-		Root:    root,
+		Path: normalizeRel(relPath),
+		Root: root,
 	}
 	type named struct {
 		e    api.BrowseEntry

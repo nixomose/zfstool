@@ -16,10 +16,13 @@
   const nav = {
     poolsOpen: true,
     disksOpen: true,
+    volumesOpen: true,
     poolKids: {},
     diskKids: {},
+    volKids: {},
     dsOpen: {}, // filesystem or snapshot name → expanded
     dirOpen: {}, // dataset + '\t' + relPath → expanded
+    volDirOpen: {}, // 'vol\t' + mount + '\t' + relPath → expanded
     poolFilter: loadStored('zfstool.nav.poolFilter', ''),
     includeFiles: loadIncludeFiles(),
     smart: {},
@@ -268,6 +271,12 @@
     if (segments[0] === 'host') return { kind: 'host', parts: [], query: query };
     if (segments[0] === 'remote') return { kind: 'remote', parts: [], query: query };
     if (segments[0] === 'volumes') return { kind: 'volumes', parts: [], query: query };
+    if (segments[0] === 'volume') {
+      if (segments[1] != null && segments[1] !== '') {
+        return { kind: 'volume', parts: [segments[1]], query: query };
+      }
+      return { kind: 'volumes', parts: [], query: query };
+    }
     if (segments[0] === 'disk' && segments[1] != null) {
       return { kind: 'disk', parts: [segments.slice(1).join('/')], query: query };
     }
@@ -388,6 +397,39 @@
     return '#/pool/' + encSeg(pool) + '/zvol/' + encSeg(name);
   }
 
+  function volumeHref(mount, opts) {
+    var h = '#/volume/' + encSeg(mount);
+    var q = [];
+    if (opts && opts.path) q.push('path=' + encSeg(opts.path));
+    if (opts && opts.file) q.push('file=' + encSeg(opts.file));
+    if (q.length) h += '?' + q.join('&');
+    return h;
+  }
+
+  function isAbsMount(mp) {
+    return !!(mp && String(mp).charAt(0) === '/');
+  }
+
+  function volumeLink(mount) {
+    if (!isAbsMount(mount)) return esc(mount || '—');
+    return (
+      '<a href="' +
+      esc(volumeHref(mount)) +
+      '" class="mono" title="' +
+      esc(mount) +
+      '">' +
+      esc(mount) +
+      '</a>'
+    );
+  }
+
+  function mountSourceHtml(m) {
+    if (!m) return '—';
+    if (m.source && String(m.source).indexOf('/dev/') === 0) return diskLink(m.source);
+    if (m.fstype === 'zfs' && m.source) return dsLink(m.source);
+    return '<span class="mono">' + esc(m.source || '—') + '</span>';
+  }
+
   function browseParentPath(path) {
     const p = String(path || '').replace(/^\/+|\/+$/g, '');
     if (!p) return '';
@@ -436,8 +478,57 @@
     );
   }
 
+  async function fillVolumeBrowsePane(pane, opts) {
+    const mount = opts.mount;
+    const path = opts.path || '';
+    const file = opts.file || '';
+    try {
+      const crumbs = [
+        '<a href="#/volumes">Volumes</a>',
+        '<a href="' + esc(volumeHref(mount)) + '">' + esc(mount) + '</a>',
+      ];
+      if (path) {
+        const parts = path.split('/');
+        let acc = '';
+        parts.forEach(function (part, i) {
+          acc = joinBrowsePath(acc, part);
+          const isLast = i === parts.length - 1 && !file;
+          if (isLast) {
+            crumbs.push('<span>' + esc(part) + '</span>');
+          } else {
+            crumbs.push(
+              '<a href="' + esc(volumeHref(mount, { path: acc })) + '">' + esc(part) + '</a>'
+            );
+          }
+        });
+      }
+      if (file) crumbs.push('<span>' + esc(file) + '</span>');
+      pane.innerHTML =
+        '<div class="browse-title">Browser</div>' +
+        '<div class="browse-crumbs">' +
+        crumbs.join(' <span class="crumb-sep">›</span> ') +
+        '</div><div class="browse-list">' +
+        (await browseEntriesWithHref(
+          '/v1/browse?mount=' + encSeg(mount) + (path ? '&path=' + encSeg(path) : ''),
+          function (extra) {
+            return volumeHref(mount, extra);
+          },
+          path,
+          file,
+          path ? 'Contents' : 'Files'
+        )) +
+        '</div>';
+    } catch (e) {
+      pane.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+    }
+  }
+
   async function fillBrowsePane(pane, opts) {
     if (!pane) return;
+    if (opts && opts.mount) {
+      await fillVolumeBrowsePane(pane, opts);
+      return;
+    }
     const pool = opts.pool;
     const dataset = opts.dataset || '';
     const path = opts.path || '';
@@ -581,22 +672,25 @@
   }
 
   async function browseEntriesSection(pool, dataset, path, selectedFile, sectionLabel) {
+    return browseEntriesWithHref(
+      '/v1/browse?dataset=' + encSeg(dataset) + (path ? '&path=' + encSeg(path) : ''),
+      function (extra) {
+        return datasetHref(pool, dataset, extra);
+      },
+      path,
+      selectedFile,
+      sectionLabel
+    );
+  }
+
+  async function browseEntriesWithHref(apiURL, hrefFn, path, selectedFile, sectionLabel) {
     try {
-      const q =
-        '/v1/browse?dataset=' +
-        encSeg(dataset) +
-        (path ? '&path=' + encSeg(path) : '');
-      const res = await j(q);
+      const res = await j(apiURL);
       const entries = res.entries || [];
       let html = '<div class="browse-section">' + esc(sectionLabel || 'Contents') + '</div>';
       if (path) {
         const parent = browseParentPath(path);
-        html += browseItemHtml(
-          datasetHref(pool, dataset, parent ? { path: parent } : {}),
-          'up',
-          '..',
-          false
-        );
+        html += browseItemHtml(hrefFn(parent ? { path: parent } : {}), 'up', '..', false);
       }
       if (!entries.length) {
         html += '<div class="browse-empty">Empty</div>';
@@ -605,16 +699,11 @@
       entries.forEach(function (e) {
         if (e.type === 'dir') {
           const child = joinBrowsePath(path, e.name);
-          html += browseItemHtml(
-            datasetHref(pool, dataset, { path: child }),
-            'dir',
-            e.name + '/',
-            false
-          );
+          html += browseItemHtml(hrefFn({ path: child }), 'dir', e.name + '/', false);
         } else {
           const active = selectedFile === e.name;
           html += browseItemHtml(
-            datasetHref(pool, dataset, { path: path || undefined, file: e.name }),
+            hrefFn({ path: path || undefined, file: e.name }),
             e.type === 'symlink' ? 'link' : 'file',
             e.name,
             active
@@ -634,32 +723,46 @@
     }
   }
 
-  async function renderFileDetail(detailEl, pool, dataset, path, fileName) {
+  async function renderFileDetail(detailEl, pool, dataset, path, fileName, mount) {
     const parentPath = path || '';
     let entry = null;
     try {
-      const res = await j(
-        '/v1/browse?dataset=' +
-          encSeg(dataset) +
+      const q = mount
+        ? '/v1/browse?mount=' +
+          encSeg(mount) +
           (parentPath ? '&path=' + encSeg(parentPath) : '')
-      );
+        : '/v1/browse?dataset=' +
+          encSeg(dataset) +
+          (parentPath ? '&path=' + encSeg(parentPath) : '');
+      const res = await j(q);
       entry = (res.entries || []).find(function (e) {
         return e.name === fileName;
       });
     } catch (_) {}
 
     const full = joinBrowsePath(parentPath, fileName);
+    const parentHref = mount
+      ? parentPath
+        ? volumeHref(mount, { path: parentPath })
+        : volumeHref(mount)
+      : parentPath
+        ? datasetHref(pool, dataset, { path: parentPath })
+        : datasetHref(pool, dataset);
+    const parentLabel = parentPath || mount || dataset;
+    const locRow = mount
+      ? '<span><span class="k">Volume</span>' + volumeLink(mount) + '</span>'
+      : '<span><span class="k">Pool</span>' +
+        poolLink(pool) +
+        '</span>' +
+        '<span><span class="k">Dataset</span>' +
+        dsLink(dataset) +
+        '</span>';
     detailEl.innerHTML =
       '<h2 class="page-title">' +
       esc(fileName) +
       '</h2>' +
       '<div class="panel"><div class="stat-row">' +
-      '<span><span class="k">Pool</span>' +
-      poolLink(pool) +
-      '</span>' +
-      '<span><span class="k">Dataset</span>' +
-      dsLink(dataset) +
-      '</span>' +
+      locRow +
       '<span><span class="k">Path</span><span class="mono">' +
       esc(full || fileName) +
       '</span></span>' +
@@ -680,13 +783,7 @@
           ],
           [
             'Parent',
-            parentPath
-              ? '<a href="' +
-                esc(datasetHref(pool, dataset, { path: parentPath })) +
-                '">' +
-                esc(parentPath) +
-                '</a>'
-              : '<a href="' + esc(datasetHref(pool, dataset)) + '">' + esc(dataset) + '</a>',
+            '<a href="' + esc(parentHref) + '">' + esc(parentLabel) + '</a>',
           ],
         ],
         true
@@ -1026,15 +1123,14 @@
     else if (fs.indexOf('ext') === 0) kind = 'ext';
     else if (fs === 'vfat' || fs === 'fat32') kind = 'vfat';
     else if (fs === 'xfs' || fs === 'btrfs') kind = fs;
-    const href =
-      m.source && String(m.source).indexOf('/dev/') === 0
-        ? diskHref(m.source)
-        : m.fstype === 'zfs'
-          ? datasetHref(poolOfDataset(m.source), m.source)
-          : '';
     return usageBarHtml(
       [
-        { label: 'used', bytes: used, kind: kind, href: href || undefined },
+        {
+          label: 'used',
+          bytes: used,
+          kind: kind,
+          href: m.target ? volumeHref(m.target) : undefined,
+        },
         { label: 'free', bytes: avail, kind: 'free' },
       ],
       { total: size || used + avail, legend: true, label: m.target }
@@ -1597,6 +1693,7 @@
     }
     if (r.kind === 'disk') return { type: 'disk', id: r.parts[0] };
     if (r.kind === 'host') return { type: 'host' };
+    if (r.kind === 'volume') return { type: 'volume', id: r.parts[0] };
     if (r.kind === 'volumes') return { type: 'volumes' };
     if (r.kind === 'remote') return { type: 'remote' };
     return { type: 'home' };
@@ -1622,13 +1719,25 @@
     const active = routeActive(r);
     let pools = [];
     let disks = [];
+    let mounts = [];
     try {
-      pools = await getPools();
-      disks = await getDisks();
+      const got = await Promise.all([
+        getPools(),
+        getDisks(),
+        getMounts().catch(function () {
+          return [];
+        }),
+      ]);
+      pools = got[0];
+      disks = got[1];
+      mounts = got[2] || [];
     } catch (e) {
       sidebarEl.innerHTML = '<p class="nav-empty err">' + esc(e.message || e) + '</p>';
       return;
     }
+    mounts = mounts.slice().sort(function (a, b) {
+      return String(a.target || '').localeCompare(String(b.target || ''));
+    });
 
     const key =
       pools
@@ -1643,19 +1752,33 @@
         })
         .join(',') +
       '|' +
+      mounts
+        .map(function (m) {
+          return m.target;
+        })
+        .join(',') +
+      '|' +
       JSON.stringify(active) +
       '|' +
       nav.poolsOpen +
       '|' +
       nav.disksOpen +
       '|' +
+      nav.volumesOpen +
+      '|' +
+      nav.includeFiles +
+      '|' +
       JSON.stringify(nav.poolKids) +
       '|' +
       JSON.stringify(nav.diskKids) +
       '|' +
+      JSON.stringify(nav.volKids) +
+      '|' +
       JSON.stringify(nav.dsOpen) +
       '|' +
       JSON.stringify(nav.dirOpen) +
+      '|' +
+      JSON.stringify(nav.volDirOpen) +
       '|' +
       Object.keys(nav.smart)
         .filter(function (k) {
@@ -1690,7 +1813,7 @@
       '" title="Match any comma-separated term. Prefix with ! to exclude." autocomplete="off" spellcheck="false" value="' +
       esc(nav.poolFilter || '') +
       '" />' +
-      '<label class="nav-files-toggle" title="Show files and directories under datasets and snapshots">' +
+      '<label class="nav-files-toggle" title="Show files and directories under datasets, snapshots, and mounted volumes">' +
       '<input type="checkbox" id="nav-include-files"' +
       (nav.includeFiles ? ' checked' : '') +
       ' />' +
@@ -1740,6 +1863,72 @@
               '<div class="nav-kids" data-pool-kids-for="' +
               esc(p.name) +
               '"><span class="muted small">Loading…</span></div>';
+          }
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    html +=
+      '<div class="nav-section">' +
+      '<button type="button" class="nav-section-head" data-toggle="volumes">' +
+      '<span class="nav-chevron">' +
+      (nav.volumesOpen ? '▾' : '▸') +
+      '</span> Volumes <span class="muted">(' +
+      mounts.length +
+      ')</span></button>';
+    if (nav.volumesOpen) {
+      html += '<div class="nav-section-body">';
+      if (!mounts.length) {
+        html += '<div class="nav-empty">No mounts</div>';
+      } else {
+        mounts.forEach(function (m) {
+          const open = !!nav.volKids[m.target];
+          const isActive = active.type === 'volume' && active.id === m.target;
+          const searchBits = [m.target, m.source || '', m.fstype || '', m.label || ''].join(' ');
+          const canBrowse = nav.includeFiles;
+          html +=
+            '<div class="nav-volume-entry" data-vol-name="' +
+            esc(searchBits) +
+            '">';
+          if (!canBrowse) {
+            html +=
+              '<a class="nav-item' +
+              (isActive ? ' active' : '') +
+              '" href="' +
+              esc(volumeHref(m.target)) +
+              '" title="' +
+              esc((m.fstype || '') + (m.source ? ' · ' + m.source : '')) +
+              '">' +
+              esc(m.target) +
+              (m.fstype ? ' <span class="muted">' + esc(m.fstype) + '</span>' : '') +
+              '</a>';
+          } else {
+            html +=
+              '<div class="nav-item-row">' +
+              '<button type="button" class="nav-twist" data-vol-kid="' +
+              esc(m.target) +
+              '">' +
+              (open ? '▾' : '▸') +
+              '</button>' +
+              '<a class="nav-item' +
+              (isActive ? ' active' : '') +
+              '" href="' +
+              esc(volumeHref(m.target)) +
+              '" title="' +
+              esc((m.fstype || '') + (m.source ? ' · ' + m.source : '')) +
+              '">' +
+              esc(m.target) +
+              (m.fstype ? ' <span class="muted">' + esc(m.fstype) + '</span>' : '') +
+              '</a></div>';
+            if (open) {
+              html +=
+                '<div class="nav-kids" data-vol-kids-for="' +
+                esc(m.target) +
+                '"><span class="muted small">Loading…</span></div>';
+            }
           }
           html += '</div>';
         });
@@ -1869,6 +2058,10 @@
       if (!nav.poolKids[pname]) return;
       fillPoolKids(pname);
     });
+    Object.keys(nav.volKids).forEach(function (mp) {
+      if (!nav.volKids[mp]) return;
+      fillVolumeKids(mp);
+    });
     Object.keys(nav.diskKids).forEach(function (dev) {
       if (!nav.diskKids[dev]) return;
       ensureDiskSmart(dev).then(function () {
@@ -1971,6 +2164,9 @@
     Array.prototype.forEach.call(sidebarEl.querySelectorAll('.nav-pool-entry'), function (entry) {
       filterTopEntry(entry, 'data-pool-name');
     });
+    Array.prototype.forEach.call(sidebarEl.querySelectorAll('.nav-volume-entry'), function (entry) {
+      filterTopEntry(entry, 'data-vol-name');
+    });
     Array.prototype.forEach.call(sidebarEl.querySelectorAll('.nav-disk-entry'), function (entry) {
       filterTopEntry(entry, 'data-disk-name');
     });
@@ -2009,6 +2205,7 @@
       if (!nav.includeFiles) {
         // Drop open directory expansions; snapshots stay.
         nav.dirOpen = {};
+        nav.volDirOpen = {};
       }
       sidebarBuiltFor = '';
       renderSidebar();
@@ -2017,6 +2214,10 @@
 
   function browseStateKey(dataset, path) {
     return dataset + '\t' + (path || '');
+  }
+
+  function volBrowseStateKey(mount, path) {
+    return 'vol\t' + mount + '\t' + (path || '');
   }
 
   function shortDatasetLabel(name, pool) {
@@ -2369,10 +2570,123 @@
     applyNavPoolFilter();
   }
 
+  async function fillVolumeKids(mount) {
+    const box = sidebarEl.querySelector(
+      '.nav-kids[data-vol-kids-for="' + cssAttrEscape(mount) + '"]'
+    );
+    if (!box) return;
+    if (!nav.includeFiles) {
+      box.innerHTML = '<span class="muted">Enable Files to browse</span>';
+      wireSidebarClicks();
+      applyNavPoolFilter();
+      return;
+    }
+    box.innerHTML = await browseVolumeKidsHtml(mount, '');
+    wireSidebarClicks();
+    refillOpenVolDirs(mount).then(function () {
+      applyNavPoolFilter();
+    });
+  }
+
+  async function browseVolumeKidsHtml(mount, path) {
+    if (!nav.includeFiles) return '';
+    try {
+      const q =
+        '/v1/browse?mount=' + encSeg(mount) + (path ? '&path=' + encSeg(path) : '');
+      const res = await j(q);
+      const entries = res.entries || [];
+      if (!entries.length) {
+        return path === '' ? '<span class="muted">No files</span>' : '<span class="muted">Empty</span>';
+      }
+      let html = '';
+      entries.forEach(function (e) {
+        const childPath = path ? path + '/' + e.name : e.name;
+        if (e.type === 'dir') {
+          const key = volBrowseStateKey(mount, childPath);
+          const open = !!nav.volDirOpen[key];
+          html +=
+            '<div class="nav-item-row">' +
+            '<button type="button" class="nav-twist" data-vol-dir-kid-mount="' +
+            esc(mount) +
+            '" data-vol-dir-kid-path="' +
+            esc(childPath) +
+            '">' +
+            (open ? '▾' : '▸') +
+            '</button>' +
+            '<a class="nav-item nav-file" href="' +
+            esc(volumeHref(mount, { path: childPath })) +
+            '" title="' +
+            esc(childPath) +
+            '">' +
+            esc(e.name) +
+            '/</a></div>';
+          if (open) {
+            html +=
+              '<div class="nav-kids" data-vol-dir-kids-for="' +
+              esc(key) +
+              '"><span class="muted small">Loading…</span></div>';
+          }
+        } else {
+          const mark = e.type === 'symlink' ? ' →' : '';
+          const parentPath = path || undefined;
+          html +=
+            '<a class="nav-file' +
+            (e.type !== 'file' ? ' muted' : '') +
+            '" href="' +
+            esc(volumeHref(mount, { path: parentPath, file: e.name })) +
+            '" title="' +
+            esc(e.type + (e.size != null ? ' · ' + e.size : '')) +
+            '">' +
+            esc(e.name) +
+            esc(mark) +
+            '</a>';
+        }
+      });
+      if (res.truncated) {
+        html += '<span class="muted">…truncated</span>';
+      }
+      return html;
+    } catch (err) {
+      return '<span class="muted" title="' + esc(err.message || err) + '">Unavailable</span>';
+    }
+  }
+
+  async function refillOpenVolDirs(mount) {
+    const prefix = 'vol\t' + mount + '\t';
+    const keys = Object.keys(nav.volDirOpen).filter(function (k) {
+      return nav.volDirOpen[k] && k.indexOf(prefix) === 0;
+    });
+    keys.sort(function (a, b) {
+      return a.length - b.length;
+    });
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const path = key.slice(prefix.length);
+      await fillVolDirKids(mount, path);
+    }
+  }
+
+  async function fillVolDirKids(mount, path) {
+    const key = volBrowseStateKey(mount, path);
+    const box = sidebarEl.querySelector(
+      '.nav-kids[data-vol-dir-kids-for="' + cssAttrEscape(key) + '"]'
+    );
+    if (!box) return;
+    box.innerHTML = await browseVolumeKidsHtml(mount, path);
+    wireSidebarClicks();
+    applyNavPoolFilter();
+  }
+
   function wireSidebarClicks() {
     sidebarEl.querySelectorAll('[data-toggle="pools"]').forEach(function (btn) {
       btn.onclick = function () {
         nav.poolsOpen = !nav.poolsOpen;
+        renderSidebar();
+      };
+    });
+    sidebarEl.querySelectorAll('[data-toggle="volumes"]').forEach(function (btn) {
+      btn.onclick = function () {
+        nav.volumesOpen = !nav.volumesOpen;
         renderSidebar();
       };
     });
@@ -2400,6 +2714,15 @@
         renderSidebar();
       };
     });
+    sidebarEl.querySelectorAll('[data-vol-kid]').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const mp = btn.getAttribute('data-vol-kid');
+        nav.volKids[mp] = !nav.volKids[mp];
+        renderSidebar();
+      };
+    });
     sidebarEl.querySelectorAll('[data-ds-kid]').forEach(function (btn) {
       btn.onclick = function (e) {
         e.preventDefault();
@@ -2417,6 +2740,17 @@
         const path = btn.getAttribute('data-dir-kid-path') || '';
         const key = browseStateKey(ds, path);
         nav.dirOpen[key] = !nav.dirOpen[key];
+        renderSidebar();
+      };
+    });
+    sidebarEl.querySelectorAll('[data-vol-dir-kid-mount]').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const mp = btn.getAttribute('data-vol-dir-kid-mount');
+        const path = btn.getAttribute('data-vol-dir-kid-path') || '';
+        const key = volBrowseStateKey(mp, path);
+        nav.volDirOpen[key] = !nav.volDirOpen[key];
         renderSidebar();
       };
     });
@@ -2495,17 +2829,11 @@
       const volPreview = (mounts || [])
         .slice(0, 8)
         .map(function (m) {
-          const src =
-            m.source && String(m.source).indexOf('/dev/') === 0
-              ? diskLink(m.source)
-              : m.fstype === 'zfs'
-                ? dsLink(m.source)
-                : '<span class="mono">' + esc(m.source) + '</span>';
           return (
-            '<tr><td class="mono">' +
-            esc(m.target) +
+            '<tr><td>' +
+            volumeLink(m.target) +
             '</td><td>' +
-            src +
+            mountSourceHtml(m) +
             '</td><td>' +
             esc(m.fstype || '—') +
             '</td><td class="mono">' +
@@ -2945,8 +3273,8 @@
                 fmtBytes(d.used) +
                 '</td><td class="mono">' +
                 fmtBytes(d.avail) +
-                '</td><td class="mono">' +
-                esc(d.mountpoint || '—') +
+                '</td><td>' +
+                (isAbsMount(d.mountpoint) ? volumeLink(d.mountpoint) : esc(d.mountpoint || '—')) +
                 '</td></tr>'
               );
             })
@@ -3372,8 +3700,8 @@
                 esc(p.type || '—') +
                 '</td><td>' +
                 esc(p.fstype || '—') +
-                '</td><td class="mono">' +
-                esc(p.mountpoint || '—') +
+                '</td><td>' +
+                (isAbsMount(p.mountpoint) ? volumeLink(p.mountpoint) : esc(p.mountpoint || '—')) +
                 '</td><td>' +
                 esc(p.label || p.partLabel || '—') +
                 '</td></tr>'
@@ -3413,7 +3741,7 @@
         ['Serial', d.serial || (barDisk && barDisk.serial) || '—'],
         ['Transport', d.transport || (barDisk && barDisk.transport) || '—'],
         ['Filesystem', d.fstype || '—'],
-        ['Mount', d.mountpoint || '—'],
+        ['Mount', ''],
         ['Label', d.label || d.partLabel || '—'],
         ['UUID', d.uuid || '—'],
       ];
@@ -3438,6 +3766,12 @@
           '<dt>Parent</dt><dd>' + diskLink(parentDisk.device) + '</dd>'
         );
       }
+      kvHtml = kvHtml.replace(
+        '<dt>Mount</dt><dd></dd>',
+        '<dt>Mount</dt><dd>' +
+          (isAbsMount(d.mountpoint) ? volumeLink(d.mountpoint) : esc(d.mountpoint || '—')) +
+          '</dd>'
+      );
 
       appEl.innerHTML =
         '<h2 class="page-title">' +
@@ -3545,7 +3879,7 @@
         let val = fmtZfsProp(k, props[k]);
         if (k === 'origin' && props[k]) val = dsLink(props[k]);
         if (k === 'mountpoint' && props[k] && props[k].charAt(0) === '/') {
-          val = '<span class="mono">' + esc(props[k]) + '</span>';
+          val = volumeLink(props[k]);
         }
         priority.push([k, val]);
       }
@@ -3648,21 +3982,13 @@
         .join('');
       const rows = (mounts || [])
         .map(function (m) {
-          let src;
-          if (m.source && String(m.source).indexOf('/dev/') === 0) {
-            src = diskLink(m.source);
-          } else if (m.fstype === 'zfs') {
-            src = dsLink(m.source);
-          } else {
-            src = '<span class="mono">' + esc(m.source || '—') + '</span>';
-          }
           const pct =
             m.size > 0 ? Math.round((100 * (m.used || 0)) / m.size) : 0;
           return (
-            '<tr><td class="mono">' +
-            esc(m.target) +
+            '<tr><td>' +
+            volumeLink(m.target) +
             '</td><td>' +
-            src +
+            mountSourceHtml(m) +
             '</td><td>' +
             esc(m.fstype || '—') +
             '</td><td class="mono">' +
@@ -3684,7 +4010,7 @@
         .join('');
       appEl.innerHTML =
         '<h2 class="page-title">Volumes</h2>' +
-        '<p class="lede">Mounted filesystems on this host, including non-ZFS volumes such as <span class="mono">/</span> and <span class="mono">/boot</span>. Click a partition or disk bar to open its detail page.</p>' +
+        '<p class="lede">Mounted filesystems on this host, including non-ZFS volumes such as <span class="mono">/</span> and <span class="mono">/boot</span>. Open a mount to browse it like a dataset. Click a partition or disk bar for disk details.</p>' +
         '<h3 class="sub">Disks</h3>' +
         diskBars +
         bars +
@@ -3696,6 +4022,127 @@
         '</tbody></table></div>';
     } catch (e) {
       appEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
+    }
+  }
+
+  async function renderVolume(mount) {
+    const q = parseRoute().query || {};
+    const browsePath = q.path || '';
+    const browseFile = q.file || '';
+    nav.volumesOpen = true;
+    nav.volKids[mount] = true;
+
+    renderBreadcrumbs(
+      [
+        { label: 'Overview', hash: '/' },
+        { label: 'Volumes', hash: '/volumes' },
+        {
+          label: mount,
+          hash: browsePath || browseFile ? '/volume/' + encSeg(mount) : null,
+        },
+      ].concat(
+        browsePath
+          ? [{ label: browsePath + (browseFile ? '/' + browseFile : ''), hash: null }]
+          : browseFile
+            ? [{ label: browseFile, hash: null }]
+            : []
+      )
+    );
+
+    const panes = mountSplitView();
+    fillBrowsePane(panes.browse, {
+      mount: mount,
+      path: browsePath,
+      file: browseFile,
+    });
+
+    if (browseFile) {
+      await renderFileDetail(panes.detail, '', '', browsePath, browseFile, mount);
+      return;
+    }
+
+    const detailEl = panes.detail;
+    detailEl.innerHTML = '<p class="loading">Loading…</p>';
+    try {
+      const mounts = await getMounts();
+      const m = (mounts || []).find(function (x) {
+        return x.target === mount;
+      });
+      if (!m) {
+        detailEl.innerHTML =
+          '<p class="err">Not a mounted filesystem: ' + esc(mount) + '</p>';
+        return;
+      }
+      const pathNote = browsePath
+        ? '<p class="muted small">Browsing <span class="mono">' +
+          esc(browsePath) +
+          '</span> — volume details below.</p>'
+        : '';
+      const src = mountSourceHtml(m);
+      const zfsNote =
+        m.fstype === 'zfs' && m.source
+          ? '<p class="muted small">ZFS dataset mount — open ' +
+            dsLink(m.source) +
+            ' for properties and snapshots.</p>'
+          : '';
+      const pct = m.size > 0 ? Math.round((100 * (m.used || 0)) / m.size) : 0;
+      detailEl.innerHTML =
+        '<h2 class="page-title">' +
+        esc(m.target) +
+        '</h2>' +
+        pathNote +
+        zfsNote +
+        '<div class="panel"><div class="stat-row">' +
+        '<span><span class="k">Type</span><span class="tag">' +
+        esc(m.fstype || 'volume') +
+        '</span></span>' +
+        '<span><span class="k">Source</span>' +
+        src +
+        '</span>' +
+        (m.size
+          ? '<span><span class="k">Used</span>' +
+            esc(fmtBytes(m.used)) +
+            ' / ' +
+            esc(fmtBytes(m.size)) +
+            (pct ? ' (' + pct + '%)' : '') +
+            '</span>'
+          : '') +
+        '</div></div>' +
+        mountBarHtml(m) +
+        '<div class="panel">' +
+        renderKV(
+          [
+            ['Mount', volumeLink(m.target)],
+            ['Filesystem', esc(m.fstype || '—')],
+            ['Source', src],
+            [
+              'Used',
+              m.size
+                ? esc(fmtIntCommas(m.used) || String(m.used)) +
+                  ' <span class="muted">(' +
+                  esc(fmtBytes(m.used)) +
+                  ')</span>'
+                : '—',
+            ],
+            [
+              'Size',
+              m.size
+                ? esc(fmtIntCommas(m.size) || String(m.size)) +
+                  ' <span class="muted">(' +
+                  esc(fmtBytes(m.size)) +
+                  ')</span>'
+                : '—',
+            ],
+            ['Available', m.avail != null ? esc(fmtBytes(m.avail)) : '—'],
+            ['Label', esc(m.label || '—')],
+            ['UUID', '<span class="mono">' + esc(m.uuid || '—') + '</span>'],
+            ['Options', '<span class="mono">' + esc(m.options || '—') + '</span>'],
+          ],
+          true
+        ) +
+        '</div>';
+    } catch (e) {
+      detailEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
   }
 
@@ -3716,6 +4163,9 @@
       case 'volumes':
         clearSplitView();
         await renderVolumes();
+        break;
+      case 'volume':
+        await renderVolume(r.parts[0]);
         break;
       case 'pool':
         await renderPool(r.parts[0]);

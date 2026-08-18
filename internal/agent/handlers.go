@@ -160,12 +160,22 @@ func (s *Server) handleDatasetProps(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	ds := r.URL.Query().Get("dataset")
-	if ds == "" {
-		writeErr(w, http.StatusBadRequest, "dataset required")
+	mount := r.URL.Query().Get("mount")
+	if ds != "" && mount != "" {
+		writeErr(w, http.StatusBadRequest, "dataset and mount are mutually exclusive")
 		return
 	}
 	path := r.URL.Query().Get("path")
-	res, err := collector.BrowseDir(r.Context(), ds, path)
+	var res *api.BrowseResult
+	var err error
+	if ds != "" {
+		res, err = collector.BrowseDir(r.Context(), ds, path)
+	} else if mount != "" {
+		res, err = collector.BrowseMount(r.Context(), mount, path)
+	} else {
+		writeErr(w, http.StatusBadRequest, "dataset or mount required")
+		return
+	}
 	if err != nil {
 		if writeClientErr(w, err) {
 			return
