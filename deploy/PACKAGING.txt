@@ -55,7 +55,7 @@ Dependencies (runtime)
 Build
 -----
 - Go module: github.com/nixomose/zfstool (e.g. go install github.com/nixomose/zfstool/cmd/zfstool@latest)
-- make deps           install OS packages for make build (apt/dnf/yum/zypper/pacman)
+- make deps           install OS packages for make build (apt/dnf/yum/zypper/pacman); `make build` runs this automatically if GTK/WebKit are missing
 - make deps-headless  install Go only, for make build-headless
 - make deb-deps       install packages for make deb (Debian/Ubuntu apt only)
 - make rpm-deps       install packages for make rpm / make srpm (dnf/yum; zypper for rpm on openSUSE)

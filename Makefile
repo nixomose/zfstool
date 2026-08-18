@@ -18,13 +18,32 @@ SUDO    ?= sudo
 # Clear GOFLAGS on build lines so a global GOFLAGS=-tags=browser_gui cannot force the browser UI.
 
 .PHONY: all build build-headless build-browser install clean deb srpm rpm rpm-tree vendor \
-	deps deps-headless deb-deps rpm-deps help
+	deps deps-headless deb-deps rpm-deps check-gui-deps help
 
 all: build
 
 # OS packages for local builds (see scripts/install-deps.sh). SUDO= empty if root.
 deps:
 	SUDO='$(SUDO)' ./scripts/install-deps.sh build
+
+# Native GUI needs gtk+-3.0 and webkit2gtk-4.1 (see third_party/webview_go).
+# If they are missing, install them the same way as `make deps`.
+# SKIP_GUI_DEPS=1 skips the auto-install (package builds / already-prepared chroots).
+check-gui-deps:
+ifeq ($(SKIP_GUI_DEPS),1)
+	@true
+else
+	@if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists gtk+-3.0 webkit2gtk-4.1; then \
+		echo 'zfstool: GTK 3 / WebKit2GTK 4.1 not found; installing build deps (make deps)…'; \
+		$(MAKE) deps; \
+		if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists gtk+-3.0 webkit2gtk-4.1; then \
+			echo 'zfstool: still missing gtk+-3.0 or webkit2gtk-4.1.' >&2; \
+			echo 'Debian/Ubuntu 24.04+: libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config' >&2; \
+			echo 'Ubuntu 22.04 uses webkit2gtk-4.0 — see third_party/README.md' >&2; \
+			exit 1; \
+		fi; \
+	fi
+endif
 
 deps-headless:
 	SUDO='$(SUDO)' ./scripts/install-deps.sh headless
@@ -35,7 +54,7 @@ deb-deps:
 rpm-deps:
 	SUDO='$(SUDO)' ./scripts/install-deps.sh rpm
 
-build:
+build: check-gui-deps
 	mkdir -p bin && GOFLAGS= CGO_ENABLED=1 go build -trimpath -buildmode=pie \
 		-ldflags '-s -w -X github.com/nixomose/zfstool/internal/version.Version=$(VERSION)' \
 		-o bin/zfstool ./cmd/zfstool
@@ -99,8 +118,8 @@ vendor:
 
 help:
 	@echo 'Targets: deps, deps-headless, deb-deps, rpm-deps,'
-	@echo '         build (native WebKit WINDOW — not your browser), build-headless, build-browser,'
-	@echo '         install, clean, deb, rpm, srpm, vendor, help'
+	@echo '         build (installs GTK/WebKit if missing, then native WebKit WINDOW),'
+	@echo '         build-headless, build-browser, install, clean, deb, rpm, srpm, vendor, help'
 	@echo 'If a browser tab opens: you built the browser variant (CGO off, browser_gui tag, or stale GOFLAGS).'
 	@echo 'Plain go build: GOFLAGS= CGO_ENABLED=1 go build ./cmd/zfstool  (same as make build)'
 	@echo 'Variables: VERSION=$(VERSION) PREFIX=$(PREFIX) RPMVER=$(RPMVER) RPMREL=$(RPMREL) SUDO=$(SUDO)'

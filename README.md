@@ -110,17 +110,16 @@ zfstool help
 From a git clone:
 
 ```bash
-# OS packages for a full native GUI build (see scripts/install-deps.sh)
-make deps
-
-# Native WebKit window (recommended on Linux desktop)
+# Native WebKit window (recommended on Linux desktop).
+# Installs GTK 3 + WebKit2GTK 4.1 dev packages if pkg-config cannot find them
+# (same as `make deps`; needs sudo unless you are root).
 make build
 # binary: ./bin/zfstool
 ```
 
 | Target | Description |
 |--------|-------------|
-| `make build` | **CGO on**, native WebKit window (`GOFLAGS` cleared on the build line). |
+| `make build` | **CGO on**, native WebKit window. Installs GTK/WebKit build deps if missing (`make deps`). |
 | `make build-headless` | **CGO off**; UI opens in the **default browser**. |
 | `make build-browser` | **CGO on** but **`-tags browser_gui`**; still uses the browser for UI. |
 | `make install` | `make build` then install to `$(PREFIX)/bin` (default `/usr/local/bin`). |
