@@ -337,7 +337,7 @@ func mediaType(rotational *bool, transport, name string) string {
 	t := strings.ToLower(transport)
 	n := strings.ToLower(name)
 	if strings.Contains(t, "nvme") || strings.HasPrefix(n, "nvme") {
-		return "ssd"
+		return "nvme"
 	}
 	if rotational != nil {
 		if *rotational {

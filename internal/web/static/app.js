@@ -837,25 +837,24 @@
 
   function mediaLabel(media) {
     const m = String(media || '').toLowerCase();
+    if (m === 'nvme') return 'NVMe';
     if (m === 'ssd') return 'SSD';
     if (m === 'hdd') return 'HDD';
     return '';
   }
 
+  function mediaTagClass(media) {
+    const m = String(media || '').toLowerCase();
+    if (m === 'nvme') return 'tag-nvme';
+    if (m === 'hdd') return 'tag-hdd';
+    if (m === 'ssd') return 'tag-ssd';
+    return 'tag-ssd';
+  }
+
   function mediaTagHtml(media) {
     const label = mediaLabel(media);
     if (!label) return '';
-    const title = label === 'HDD' ? 'Rotational disk (spinner)' : 'Solid-state disk';
-    const cls = label === 'HDD' ? 'tag-hdd' : 'tag-ssd';
-    return (
-      ' <span class="tag tag-media ' +
-      cls +
-      '" title="' +
-      title +
-      '">' +
-      label +
-      '</span>'
-    );
+    return ' <span class="tag tag-media ' + mediaTagClass(media) + '">' + label + '</span>';
   }
 
   function flattenDisks(disks) {
@@ -996,7 +995,7 @@
         '</div>';
     }
     const cap = opts.label
-      ? '<div class="usage-bar-label">' + esc(opts.label) + '</div>'
+      ? '<div class="usage-bar-label">' + esc(opts.label) + (opts.labelHtml || '') + '</div>'
       : '';
     return '<div class="usage-bar-wrap">' + cap + bar + legend + '</div>';
   }
@@ -1045,6 +1044,7 @@
     return usageBarHtml(segs, {
       total: diskSize || used,
       label: shortDev(disk.device) + (disk.model ? ' · ' + disk.model : ''),
+      labelHtml: mediaTagHtml(disk.media),
       aria: 'Partitions on ' + (disk.device || ''),
     });
   }

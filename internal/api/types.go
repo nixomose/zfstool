@@ -131,7 +131,7 @@ type DiskSummary struct {
 	Size       uint64           `json:"size,omitempty"`
 	Used       uint64           `json:"used,omitempty"`
 	Avail      uint64           `json:"avail,omitempty"`
-	Media      string           `json:"media,omitempty"` // ssd, hdd, unknown
+	Media      string           `json:"media,omitempty"` // nvme, ssd, hdd, unknown
 	Rotational *bool            `json:"rotational,omitempty"`
 	Model      string           `json:"model,omitempty"`
 	Serial     string           `json:"serial,omitempty"`

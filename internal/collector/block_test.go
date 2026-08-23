@@ -103,7 +103,7 @@ func TestDisksFromLsblkJSON(t *testing.T) {
 		t.Fatalf("boot mount %q", sda.Children[1].Mountpoint)
 	}
 	nvme := disks[1]
-	if nvme.Media != "ssd" {
+	if nvme.Media != "nvme" {
 		t.Fatalf("nvme media %s", nvme.Media)
 	}
 	if nvme.Rotational == nil || *nvme.Rotational {
@@ -119,10 +119,10 @@ func TestMediaType(t *testing.T) {
 	if g := mediaType(&fal, "sata", "sda"); g != "ssd" {
 		t.Fatalf("sata ssd: %s", g)
 	}
-	if g := mediaType(&tru, "nvme", "nvme0n1"); g != "ssd" {
+	if g := mediaType(&tru, "nvme", "nvme0n1"); g != "nvme" {
 		t.Fatalf("nvme overrides rota: %s", g)
 	}
-	if g := mediaType(nil, "", "nvme1n1"); g != "ssd" {
+	if g := mediaType(nil, "", "nvme1n1"); g != "nvme" {
 		t.Fatalf("nvme name: %s", g)
 	}
 }
