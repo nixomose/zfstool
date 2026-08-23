@@ -1,3 +1,9 @@
+zfstool (0.2.10-1) unstable; urgency=medium
+
+  * Show NVMe, SSD, and HDD media tags on disks (not only in tooltips).
+
+ -- nixomose <nixomose@gmail.com>  Sun, 23 Aug 2026 22:45:39 +0000
+
 zfstool (0.2.9-1) unstable; urgency=medium
 
   * File browser filter box (comma OR, !exclude), persisted per dataset/volume.
