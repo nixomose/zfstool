@@ -857,6 +857,22 @@
     return ' <span class="tag tag-media ' + mediaTagClass(media) + '">' + label + '</span>';
   }
 
+  function healthIsOk(health) {
+    const s = String(health || '')
+      .trim()
+      .toUpperCase();
+    return s === 'ONLINE' || s === 'AVAIL' || s === 'AVAILABLE';
+  }
+
+  function healthTagHtml(health) {
+    const raw = String(health || '').trim();
+    if (!raw || raw === '—') {
+      return '<span class="tag">' + esc('—') + '</span>';
+    }
+    const cls = healthIsOk(raw) ? 'tag-health' : 'tag-health-bad';
+    return '<span class="tag ' + cls + '">' + esc(raw) + '</span>';
+  }
+
   function flattenDisks(disks) {
     const out = [];
     function walk(d, parent) {
@@ -1903,9 +1919,9 @@
             esc(p.health) +
             '">' +
             esc(p.name) +
-            ' <span class="tag tag-health">' +
-            esc(p.health) +
-            '</span></a></div>';
+            ' ' +
+            healthTagHtml(p.health) +
+            '</a></div>';
           if (open) {
             html +=
               '<div class="nav-kids" data-pool-kids-for="' +
@@ -2822,9 +2838,9 @@
           return (
             '<tr><td>' +
             poolLink(p.name) +
-            '</td><td><span class="tag tag-health">' +
-            esc(p.health) +
-            '</span></td><td class="mono">' +
+            '</td><td>' +
+            healthTagHtml(p.health) +
+            '</td><td class="mono">' +
             fmtBytes(p.allocated) +
             '</td><td class="mono">' +
             fmtBytes(p.size) +
@@ -3256,7 +3272,7 @@
               ' <span class="tag tag-role">' +
               esc(ln.role) +
               '</span></td><td>' +
-              esc(ln.state || '—') +
+              healthTagHtml(ln.state) +
               '</td><td class="mono">' +
               esc(ln.read || '—') +
               '</td><td class="mono">' +
@@ -3270,11 +3286,11 @@
         body =
           '<div class="panel"><div class="stat-row">' +
           '<span><span class="k">State</span>' +
-          esc(st.state) +
+          healthTagHtml(st.state) +
           '</span>' +
-          '<span><span class="k">Health</span><span class="tag tag-health">' +
-          esc(sum.health || '—') +
-          '</span></span>' +
+          '<span><span class="k">Health</span>' +
+          healthTagHtml(sum.health) +
+          '</span>' +
           '<span><span class="k">Size</span>' +
           fmtBytes(sum.size) +
           '</span>' +
@@ -3642,7 +3658,7 @@
             '</td><td>' +
             esc(c.role) +
             '</td><td>' +
-            esc(c.state) +
+            healthTagHtml(c.state) +
             '</td></tr>'
           );
         })
