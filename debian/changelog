@@ -1,3 +1,10 @@
+zfstool (0.2.11-1) unstable; urgency=medium
+
+  * Depend on GTK/GLib with t64 | non-t64 names so apt can install on
+    Ubuntu 22.04 and Debian bookworm as well as 24.04/trixie.
+
+ -- nixomose <nixomose@gmail.com>  Sun, 30 Aug 2026 15:06:19 +0000
+
 zfstool (0.2.10-1) unstable; urgency=medium
 
   * Show NVMe, SSD, and HDD media tags on disks (not only in tooltips).
