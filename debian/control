@@ -11,7 +11,12 @@ Standards-Version: 4.6.2
 
 Package: zfstool
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}, zfsutils-linux
+Depends: ${misc:Depends}, ${shlibs:Depends},
+ libglib2.0-0t64 (>= 2.16.0) | libglib2.0-0 (>= 2.16.0),
+ libgtk-3-0t64 (>= 3.9.10) | libgtk-3-0 (>= 3.9.10),
+ libwebkit2gtk-4.1-0 (>= 2.21.1),
+ libjavascriptcoregtk-4.1-0,
+ zfsutils-linux
 Recommends: smartmontools
 Description: read-only ZFS and host inspection tool (API server, web UI, GUI)
  zfstool runs a small API server (zfstool server) that exposes pool and

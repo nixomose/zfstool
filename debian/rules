@@ -31,3 +31,9 @@ override_dh_auto_test:
 
 override_dh_auto_clean:
 	rm -f zfstool
+
+# Ubuntu 24.04 / Debian trixie rename glib and gtk to *t64. Older releases
+# still ship libglib2.0-0 and libgtk-3-0 (same amd64 SONAME). Drop the hard
+# t64 names from shlibdeps so debian/control can OR them with the old names.
+override_dh_shlibdeps:
+	dh_shlibdeps -- -xlibglib2.0-0t64 -xlibgtk-3-0t64 -xlibgdk-pixbuf-2.0-0t64
