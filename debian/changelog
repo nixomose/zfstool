@@ -1,3 +1,9 @@
+zfstool (0.2.13-1) unstable; urgency=medium
+
+  * Show every snapshot when a dataset or volume is expanded in the sidebar.
+
+ -- nixomose <nixomose@gmail.com>  Mon, 14 Sep 2026 20:32:37 +0000
+
 zfstool (0.2.12-1) unstable; urgency=medium
 
   * Color pool health green when ONLINE, red when degraded or unavailable.
