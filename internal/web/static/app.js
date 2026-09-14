@@ -2457,7 +2457,7 @@
       const snaps = (snapRows || []).filter(function (s) {
         return s.name.indexOf(dsName + '@') === 0;
       });
-      snaps.slice(0, 50).forEach(function (s) {
+      snaps.forEach(function (s) {
         const open = !!nav.dsOpen[s.name];
         const active = activeRouteIsDataset(s.name);
         if (!nav.includeFiles) {
@@ -2502,7 +2502,7 @@
       const snaps = (snapRows || []).filter(function (s) {
         return s.name.indexOf(dsName + '@') === 0;
       });
-      snaps.slice(0, 50).forEach(function (s) {
+      snaps.forEach(function (s) {
         html +=
           '<a href="' +
           esc(datasetHref(pname, s.name)) +
