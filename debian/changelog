@@ -1,3 +1,9 @@
+zfstool (0.2.15-1) unstable; urgency=medium
+
+  * Extend the ZFS diff timeout from one minute to 24 hours.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 15 Sep 2026 01:18:07 +0000
+
 zfstool (0.2.14-1) unstable; urgency=medium
 
   * Add snapshot-centered ZFS diff with sibling and live dataset targets.
