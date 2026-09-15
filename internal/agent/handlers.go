@@ -14,6 +14,8 @@ import (
 	"github.com/nixomose/zfstool/internal/zfsname"
 )
 
+const zfsDiffTimeout = 24 * time.Hour
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -331,7 +333,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"version": version.Version})
 }
 
-// ZfsDiff runs zfs diff (bounded) — POST body JSON {from,to}
+// ZfsDiff runs zfs diff (bounded to allow very large datasets) — POST body JSON {from,to}
 func (s *Server) handleZfsDiff(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErr(w, http.StatusMethodNotAllowed, "POST only")
@@ -345,7 +347,7 @@ func (s *Server) handleZfsDiff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), zfsDiffTimeout)
 	defer cancel()
 	out, err := collector.ZfsDiff(ctx, body.From, body.To)
 	if err != nil {
