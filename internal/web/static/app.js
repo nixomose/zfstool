@@ -3158,6 +3158,62 @@
     return filtered.length;
   }
 
+  async function runZfsDiff(from, to, outEl, buttonEl) {
+    if (!outEl) return;
+    if (!from || !to) {
+      outEl.hidden = false;
+      outEl.textContent = 'Select both From and To.';
+      return;
+    }
+    outEl.hidden = false;
+    outEl.textContent = 'Running…';
+    if (buttonEl) buttonEl.disabled = true;
+    try {
+      const res = await j('/v1/zfs-diff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: from, to: to }),
+      });
+      outEl.textContent = res.output || 'No differences.';
+    } catch (err) {
+      outEl.textContent = err.message || String(err);
+    } finally {
+      if (buttonEl) buttonEl.disabled = false;
+    }
+  }
+
+  function snapshotOrder(props) {
+    if (!props) return null;
+    const txg = Number(props.createtxg);
+    if (isFinite(txg) && txg > 0) return txg;
+    const created = Number(props.creation);
+    return isFinite(created) && created > 0 ? created : null;
+  }
+
+  async function runSnapshotDiff(snapshot, target, snapshotProps, outEl, buttonEl) {
+    let from = snapshot;
+    let to = target;
+    if (snapshotDatasetName(target)) {
+      outEl.hidden = false;
+      outEl.textContent = 'Checking snapshot order…';
+      if (buttonEl) buttonEl.disabled = true;
+      try {
+        const targetData = await j('/v1/datasets/properties?name=' + encSeg(target));
+        const selectedOrder = snapshotOrder(snapshotProps);
+        const targetOrder = snapshotOrder(targetData.properties || {});
+        if (selectedOrder != null && targetOrder != null && targetOrder < selectedOrder) {
+          from = target;
+          to = snapshot;
+        }
+      } catch (err) {
+        outEl.textContent = err.message || String(err);
+        if (buttonEl) buttonEl.disabled = false;
+        return;
+      }
+    }
+    await runZfsDiff(from, to, outEl, buttonEl);
+  }
+
   async function renderRemote() {
     renderBreadcrumbs([
       { label: 'Overview', hash: '/' },
@@ -3607,23 +3663,7 @@
             const from = fromEl.value.trim();
             const to = toEl.value.trim();
             const out = document.getElementById('diff-out');
-            if (!from || !to) {
-              out.hidden = false;
-              out.textContent = 'Select both From and To.';
-              return;
-            }
-            out.hidden = false;
-            out.textContent = 'Running…';
-            try {
-              const res = await j('/v1/zfs-diff', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ from: from, to: to }),
-              });
-              out.textContent = res.output || '(empty)';
-            } catch (err) {
-              out.textContent = err.message || String(err);
-            }
+            await runZfsDiff(from, to, out, btn);
           };
         }
       }
@@ -3957,6 +3997,7 @@
         });
 
       let holdsBlock = '';
+      let diffBlock = '';
       if (isSnap) {
         const holdMap = holds && typeof holds === 'object' && !Array.isArray(holds) ? holds : {};
         const tags = Object.keys(holdMap);
@@ -3978,6 +4019,31 @@
               '</tbody></table></div>'
             : '<span class="muted">None</span>') +
           '</div>';
+
+        const siblingSnapshots = (poolRows || [])
+          .filter(function (d) {
+            return (
+              d.type === 'snapshot' &&
+              snapshotDatasetName(d.name) === snapshotDatasetName(dsName)
+            );
+          })
+          .map(function (d) {
+            return d.name;
+          })
+          .sort();
+        diffBlock =
+          '<h3 class="sub">Diff</h3><div class="panel">' +
+          '<p class="muted small">Compare this snapshot to the live dataset or another snapshot on the same dataset. Snapshot pairs are automatically ordered from older to newer for ZFS.</p>' +
+          '<div class="form-row">' +
+          '<span class="muted small">Snapshot</span><span class="mono">' +
+          esc(dsName) +
+          '</span>' +
+          '<label for="snapshot-diff-to">Compare with</label>' +
+          '<select id="snapshot-diff-to">' +
+          diffToOptionsHtml(dsName, siblingSnapshots) +
+          '</select>' +
+          '<button type="button" class="btn primary" id="snapshot-diff-run">Diff</button>' +
+          '</div><pre id="snapshot-diff-out" hidden></pre></div>';
       }
 
       const allowOut = allow && allow.output != null ? allow.output : '';
@@ -4021,8 +4087,20 @@
         '<div class="panel">' +
         renderKV(priority.concat(rest), true) +
         '</div>' +
+        diffBlock +
         holdsBlock +
         allowBlock;
+
+      if (isSnap) {
+        const toEl = document.getElementById('snapshot-diff-to');
+        const btn = document.getElementById('snapshot-diff-run');
+        const out = document.getElementById('snapshot-diff-out');
+        if (toEl && btn && out) {
+          btn.onclick = async function () {
+            await runSnapshotDiff(dsName, toEl.value.trim(), props, out, btn);
+          };
+        }
+      }
     } catch (e) {
       detailEl.innerHTML = '<p class="err">' + esc(e.message || e) + '</p>';
     }
