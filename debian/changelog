@@ -1,3 +1,11 @@
+zfstool (0.2.17-1) unstable; urgency=medium
+
+  * Prevent center browser rows from shrinking together; preserve readable
+    row heights and scroll the list like the left navigation.
+  * Add persisted comma/!exclude filtering to ZFS diff results.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 15 Sep 2026 01:34:10 +0000
+
 zfstool (0.2.16-1) unstable; urgency=medium
 
   * Improve center browser readability with larger text and roomier rows.
