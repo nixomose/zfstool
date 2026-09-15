@@ -1390,6 +1390,76 @@
     }
   }
 
+  function applyDiffResultFilter(outEl) {
+    if (!outEl || !outEl._diffFilterEnabled) return;
+    const box = outEl.closest('.diff-results');
+    if (!box) return;
+    const input = box.querySelector('.list-filter-input');
+    const countEl = box.querySelector('.list-filter-count');
+    const query = input ? input.value.trim() : '';
+    const lines = String(outEl._rawDiffOutput || '').split('\n');
+    const shown = query
+      ? lines.filter(function (line) {
+          return textMatchesFilter(line, query);
+        })
+      : lines;
+    outEl.textContent = shown.length ? shown.join('\n') : 'No matching diff lines.';
+    if (countEl) {
+      if (query && lines.length) {
+        countEl.hidden = false;
+        countEl.textContent = shown.length + '/' + lines.length;
+      } else {
+        countEl.hidden = true;
+        countEl.textContent = '';
+      }
+    }
+  }
+
+  function wireDiffResultFilter(outEl, key) {
+    if (!outEl) return;
+    const box = outEl.closest('.diff-results');
+    if (!box) return;
+    const input = box.querySelector('.list-filter-input');
+    if (!input || input.dataset.wired === '1') return;
+    input.dataset.wired = '1';
+    const saved = loadFiltersMap()[key];
+    if (saved) input.value = saved;
+    input.addEventListener('input', function () {
+      applyDiffResultFilter(outEl);
+      saveFilterValue(key, input.value);
+    });
+  }
+
+  function showDiffOutput(outEl, text, filterable) {
+    if (!outEl) return;
+    const box = outEl.closest('.diff-results');
+    if (box) box.hidden = false;
+    outEl._rawDiffOutput = String(text || '');
+    outEl._diffFilterEnabled = !!filterable;
+    if (filterable) {
+      applyDiffResultFilter(outEl);
+      return;
+    }
+    outEl.textContent = outEl._rawDiffOutput;
+    if (box) {
+      const countEl = box.querySelector('.list-filter-count');
+      if (countEl) {
+        countEl.hidden = true;
+        countEl.textContent = '';
+      }
+    }
+  }
+
+  function diffResultsHtml(outID) {
+    return (
+      '<div class="diff-results" hidden>' +
+      filterBarHtml('Filter diff results…  comma = OR,  !foo = exclude') +
+      '<pre id="' +
+      esc(outID) +
+      '"></pre></div>'
+    );
+  }
+
   function smartURL(dev) {
     const seg = String(dev).indexOf('/dev/') === 0 ? dev : '/dev/' + String(dev).replace(/^\//, '');
     return '/v1/disk/' + encSeg(seg) + '/smart';
@@ -3161,12 +3231,10 @@
   async function runZfsDiff(from, to, outEl, buttonEl) {
     if (!outEl) return;
     if (!from || !to) {
-      outEl.hidden = false;
-      outEl.textContent = 'Select both From and To.';
+      showDiffOutput(outEl, 'Select both From and To.', false);
       return;
     }
-    outEl.hidden = false;
-    outEl.textContent = 'Running…';
+    showDiffOutput(outEl, 'Running…', false);
     if (buttonEl) buttonEl.disabled = true;
     try {
       const res = await j('/v1/zfs-diff', {
@@ -3174,9 +3242,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: from, to: to }),
       });
-      outEl.textContent = res.output || 'No differences.';
+      showDiffOutput(outEl, res.output || 'No differences.', true);
     } catch (err) {
-      outEl.textContent = err.message || String(err);
+      showDiffOutput(outEl, err.message || String(err), false);
     } finally {
       if (buttonEl) buttonEl.disabled = false;
     }
@@ -3194,8 +3262,7 @@
     let from = snapshot;
     let to = target;
     if (snapshotDatasetName(target)) {
-      outEl.hidden = false;
-      outEl.textContent = 'Checking snapshot order…';
+      showDiffOutput(outEl, 'Checking snapshot order…', false);
       if (buttonEl) buttonEl.disabled = true;
       try {
         const targetData = await j('/v1/datasets/properties?name=' + encSeg(target));
@@ -3206,7 +3273,7 @@
           to = snapshot;
         }
       } catch (err) {
-        outEl.textContent = err.message || String(err);
+        showDiffOutput(outEl, err.message || String(err), false);
         if (buttonEl) buttonEl.disabled = false;
         return;
       }
@@ -3589,7 +3656,9 @@
             diffToOptionsHtml(defaultFrom, snapshots) +
             '</select>' +
             '<button type="button" class="btn primary" id="diff-run">Diff</button>' +
-            '</div><pre id="diff-out" hidden></pre></div>';
+            '</div>' +
+            diffResultsHtml('diff-out') +
+            '</div>';
         }
       }
 
@@ -3618,6 +3687,7 @@
         const fromEl = document.getElementById('diff-from');
         const toEl = document.getElementById('diff-to');
         const btn = document.getElementById('diff-run');
+        const outEl = document.getElementById('diff-out');
         const filterEl = document.getElementById('diff-filter');
         const filterCountEl = document.getElementById('diff-filter-count');
         const snapNames = datasets
@@ -3658,12 +3728,12 @@
             rebuildDiffSelects(fromEl, toEl, snapNames, filterEl.value, fromEl.value, toEl.value);
           };
         }
-        if (btn && fromEl && toEl) {
+        wireDiffResultFilter(outEl, 'diff-results.' + poolName);
+        if (btn && fromEl && toEl && outEl) {
           btn.onclick = async function () {
             const from = fromEl.value.trim();
             const to = toEl.value.trim();
-            const out = document.getElementById('diff-out');
-            await runZfsDiff(from, to, out, btn);
+            await runZfsDiff(from, to, outEl, btn);
           };
         }
       }
@@ -4043,7 +4113,9 @@
           diffToOptionsHtml(dsName, siblingSnapshots) +
           '</select>' +
           '<button type="button" class="btn primary" id="snapshot-diff-run">Diff</button>' +
-          '</div><pre id="snapshot-diff-out" hidden></pre></div>';
+          '</div>' +
+          diffResultsHtml('snapshot-diff-out') +
+          '</div>';
       }
 
       const allowOut = allow && allow.output != null ? allow.output : '';
@@ -4096,6 +4168,7 @@
         const btn = document.getElementById('snapshot-diff-run');
         const out = document.getElementById('snapshot-diff-out');
         if (toEl && btn && out) {
+          wireDiffResultFilter(out, 'snapshot-diff-results.' + dsName);
           btn.onclick = async function () {
             await runSnapshotDiff(dsName, toEl.value.trim(), props, out, btn);
           };
