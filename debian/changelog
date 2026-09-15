@@ -1,3 +1,10 @@
+zfstool (0.2.14-1) unstable; urgency=medium
+
+  * Add snapshot-centered ZFS diff with sibling and live dataset targets.
+  * Automatically order snapshot comparisons from older to newer.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 15 Sep 2026 01:02:58 +0000
+
 zfstool (0.2.13-1) unstable; urgency=medium
 
   * Show every snapshot when a dataset or volume is expanded in the sidebar.
