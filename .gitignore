@@ -1,6 +1,7 @@
 # Build output
 /zfstool
 bin/zfstool
+bin/zfstool-*
 *.exe
 *.test
 dist/

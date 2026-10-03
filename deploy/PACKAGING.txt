@@ -62,12 +62,15 @@ Build
 - make build           (native GTK; CGO_ENABLED=1)
 - make build-headless  (CGO off; browser UI)
 - make build-browser   (CGO on, -tags browser_gui; browser UI)
+- make build-arm64     (cross-buildable Linux ARM64, CGO off; browser UI)
+- make build-arm64-native (native Linux ARM64 host; full GTK/WebKit UI)
 
 Debian (.deb)
 -------------
 - Build deps: debhelper-compat (= 13), golang-go (>= 1.22), gcc, pkg-config,
   libgtk-3-dev, dpkg-dev; runtime: libgtk-3-0, zfsutils-linux.
 - From repo root: make deb   (or: ./scripts/build-deb.sh)
+- Native ARM64 host: make deb-arm64
 - Installs .deb in parent directory (..).
 
 RPM
@@ -75,5 +78,6 @@ RPM
 - Build deps: rpm-build, golang >= 1.22, gcc, gtk3-devel (pkgconfig gtk+-3.0),
   systemd-rpm-macros; git for the source tarball.
 - From repo root: make rpm   (or: ./scripts/build-rpm.sh)
+- Native ARM64 host: make rpm-arm64 (RPM architecture is named aarch64)
 - Binary RPM under build/rpm/RPMS/<arch>/; override version: make rpm RPMVER=0.2.0 RPMREL=1
 - Source RPM: make srpm

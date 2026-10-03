@@ -1,3 +1,11 @@
+zfstool (0.2.18-1) unstable; urgency=medium
+
+  * Add a portable Linux ARM64 build for 64-bit Raspberry Pi systems.
+  * Add native ARM64 desktop, Debian, and RPM build targets.
+  * Document Raspberry Pi build and installation options.
+
+ -- nixomose <nixomose@gmail.com>  Sat, 03 Oct 2026 17:08:12 -0400
+
 zfstool (0.2.17-1) unstable; urgency=medium
 
   * Prevent center browser rows from shrinking together; preserve readable

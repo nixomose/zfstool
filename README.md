@@ -123,6 +123,8 @@ make build
 | `make build` | **CGO on**, native WebKit window. Installs GTK/WebKit build deps if missing (`make deps`). |
 | `make build-headless` | **CGO off**; UI opens in the **default browser**. |
 | `make build-browser` | **CGO on** but **`-tags browser_gui`**; still uses the browser for UI. |
+| `make build-arm64` | Cross-build a portable **Linux ARM64** binary for Raspberry Pi; CGO off, so the UI opens in a browser. |
+| `make build-arm64-native` | Build the full ARM64 GTK/WebKit desktop app **on a 64-bit ARM Linux host**. |
 | `make install` | `make build` then install to `$(PREFIX)/bin` (default `/usr/local/bin`). |
 | `make clean` | Remove `bin/`, RPM build tree, stray `./zfstool`. |
 
@@ -140,6 +142,32 @@ GOFLAGS= CGO_ENABLED=1 go build -o zfstool ./cmd/zfstool
 
 If a **browser tab** opens instead of a window, you likely built with CGO disabled, `browser_gui` tags, or a global **`GOFLAGS`**; use `make build` or the line above.
 
+### Raspberry Pi / Linux ARM64
+
+From any machine with Go 1.22+, build the portable ARM64 binary:
+
+```bash
+make build-arm64
+# output: ./bin/zfstool-linux-arm64
+```
+
+Copy it to a Raspberry Pi running a **64-bit OS**, make it executable, and run
+any of the usual commands (`gui`, `server`, or `web`). The portable build has
+all zfstool features and commands; only the embedded desktop window is replaced
+by the system browser because cross-building GTK/WebKit is not portable.
+
+For the same native desktop window as the regular build, clone the repository
+on the Pi (or another Linux ARM64 machine) and build there:
+
+```bash
+make deps
+make build-arm64-native
+# output: ./bin/zfstool-linux-arm64
+```
+
+Raspberry Pi models capable of ARM64 still need a 64-bit userspace; check that
+`uname -m` prints `aarch64`. A 32-bit Raspberry Pi OS cannot run this binary.
+
 ---
 
 ## Packaging
@@ -147,7 +175,9 @@ If a **browser tab** opens instead of a window, you likely built with CGO disabl
 | Target | Notes |
 |--------|--------|
 | `make deb` | Debian binary package; output in the **parent** directory of the repo. Run `make deb-deps` first on Debian/Ubuntu. |
+| `make deb-arm64` | ARM64 Debian package, built natively on an ARM64 Debian/Raspberry Pi OS host. |
 | `make rpm` | Binary RPM under `build/rpm/RPMS/<arch>/`. Run `make rpm-deps` first. |
+| `make rpm-arm64` | AArch64 RPM, built natively on an ARM64 RPM-based host. |
 | `make srpm` | Source RPM under `build/rpm/SRPMS/`. |
 
 More detail: [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt).
