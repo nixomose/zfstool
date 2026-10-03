@@ -174,8 +174,9 @@ Raspberry Pi models capable of ARM64 still need a 64-bit userspace; check that
 
 | Target | Notes |
 |--------|--------|
-| `make deb` | Debian binary package; output in the **parent** directory of the repo. Run `make deb-deps` first on Debian/Ubuntu. |
-| `make deb-arm64` | ARM64 Debian package, built natively on an ARM64 Debian/Raspberry Pi OS host. |
+| `make deb` | Build both AMD64 and ARM64 Debian packages in the **parent** directory. Run `make deb-deps` first. |
+| `make deb-amd64` | Build only the AMD64 Debian package. A cross-built package uses the browser UI. |
+| `make deb-arm64` | Build only the ARM64 Debian package. A cross-built package uses the browser UI. |
 | `make rpm` | Binary RPM under `build/rpm/RPMS/<arch>/`. Run `make rpm-deps` first. |
 | `make rpm-arm64` | AArch64 RPM, built natively on an ARM64 RPM-based host. |
 | `make srpm` | Source RPM under `build/rpm/SRPMS/`. |

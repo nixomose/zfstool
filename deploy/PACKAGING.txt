@@ -69,9 +69,11 @@ Debian (.deb)
 -------------
 - Build deps: debhelper-compat (= 13), golang-go (>= 1.22), gcc, pkg-config,
   libgtk-3-dev, dpkg-dev; runtime: libgtk-3-0, zfsutils-linux.
-- From repo root: make deb   (or: ./scripts/build-deb.sh)
-- Native ARM64 host: make deb-arm64
-- Installs .deb in parent directory (..).
+- From repo root: make deb (builds both amd64 and arm64 packages)
+- One architecture only: make deb-amd64 or make deb-arm64
+- A package built for the host architecture has the native GTK/WebKit window;
+  the cross-built package has the browser UI. Both contain all commands.
+- Installs .deb files in the parent directory (..).
 
 RPM
 ---

@@ -1,3 +1,10 @@
+zfstool (0.2.19-1) unstable; urgency=medium
+
+  * Build AMD64 and ARM64 Debian packages together with make deb.
+  * Support portable cross-architecture Debian package builds.
+
+ -- nixomose <nixomose@gmail.com>  Sat, 03 Oct 2026 17:14:09 -0400
+
 zfstool (0.2.18-1) unstable; urgency=medium
 
   * Add a portable Linux ARM64 build for 64-bit Raspberry Pi systems.
