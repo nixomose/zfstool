@@ -12,6 +12,7 @@ jobs:
   build-deb:
     name: Debian ${{ matrix.arch }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -36,10 +37,11 @@ jobs:
           dpkg-deb -x "$package" package-root
           file package-root/usr/bin/zfstool
           ldd package-root/usr/bin/zfstool | grep -E 'libgtk-3|libwebkit2gtk-4.1'
+          cp "$package" .
       - uses: actions/upload-artifact@v4
         with:
           name: zfstool-deb-${{ matrix.arch }}
-          path: ../zfstool_*_${{ matrix.arch }}.deb
+          path: zfstool_*_${{ matrix.arch }}.deb
           if-no-files-found: error
 
   publish:
