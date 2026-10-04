@@ -20,7 +20,8 @@ SUDO    ?= sudo
 # Clear GOFLAGS on build lines so a global GOFLAGS=-tags=browser_gui cannot force the browser UI.
 
 .PHONY: all build build-headless build-browser build-arm64 build-arm64-native \
-	check-arm64 check-arm64-host install clean deb deb-amd64 deb-arm64 srpm rpm rpm-arm64 \
+	check-arm64 check-arm64-host check-deb-amd64-host check-deb-arm64-host \
+	install clean deb deb-amd64 deb-arm64 srpm rpm rpm-arm64 \
 	rpm-tree vendor deps deps-headless deb-deps rpm-deps check-gui-deps help
 
 all: build
@@ -117,15 +118,25 @@ clean:
 	rm -rf bin build/rpm
 	rm -f zfstool
 
-# --- Debian (both binary packages in parent directory) ---
+# --- Debian (native package in parent directory) ---
+# Tagged releases build both packages on native AMD64 and ARM64 GitHub runners.
 deb:
-	./scripts/build-deb.sh -aamd64
-	./scripts/build-deb.sh -aarm64
+	./scripts/build-deb.sh
 
-deb-amd64:
+check-deb-amd64-host:
+	@if [ "$$(dpkg-architecture -qDEB_BUILD_ARCH)" != amd64 ]; then \
+		echo 'deb-amd64 requires a native AMD64 Debian/Ubuntu host.' >&2; exit 1; \
+	fi
+
+deb-amd64: check-deb-amd64-host
 	./scripts/build-deb.sh -aamd64
 
-deb-arm64:
+check-deb-arm64-host:
+	@if [ "$$(dpkg-architecture -qDEB_BUILD_ARCH)" != arm64 ]; then \
+		echo 'deb-arm64 requires a native ARM64 Debian/Ubuntu host.' >&2; exit 1; \
+	fi
+
+deb-arm64: check-deb-arm64-host
 	./scripts/build-deb.sh -aarm64
 
 # --- RPM ---
@@ -161,7 +172,7 @@ help:
 	@echo '         build (installs GTK/WebKit if missing, then native WebKit WINDOW),'
 	@echo '         build-headless, build-browser, build-arm64 (cross-build, browser UI),'
 	@echo '         build-arm64-native (run on ARM64 for WebKit UI), install, clean,'
-	@echo '         deb (amd64 + arm64), deb-amd64, deb-arm64, rpm, rpm-arm64, srpm, vendor, help'
+	@echo '         deb (native architecture), deb-amd64, deb-arm64, rpm, rpm-arm64, srpm, vendor, help'
 	@echo 'If a browser tab opens: you built the browser variant (CGO off, browser_gui tag, or stale GOFLAGS).'
 	@echo 'Plain go build: GOFLAGS= CGO_ENABLED=1 go build ./cmd/zfstool  (same as make build)'
 	@echo 'Variables: VERSION=$(VERSION) OUTPUT=$(OUTPUT) ARM64_OUTPUT=$(ARM64_OUTPUT) PREFIX=$(PREFIX)'

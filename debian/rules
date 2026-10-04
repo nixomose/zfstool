@@ -9,14 +9,7 @@ GO_ARCH_amd64 := amd64
 GO_ARCH_arm64 := arm64
 GO_ARCH := $(GO_ARCH_$(DEB_HOST_ARCH))
 
-# Native packages keep the embedded GTK/WebKit window. Cross-packages use the
-# pure-Go browser UI so both amd64 and arm64 packages can be produced without
-# installing a second architecture's C compiler and GUI development libraries.
-ifeq ($(DEB_BUILD_ARCH),$(DEB_HOST_ARCH))
 PACKAGE_CGO := 1
-else
-PACKAGE_CGO := 0
-endif
 
 %:
 	dh $@
@@ -43,28 +36,15 @@ override_dh_auto_install:
 override_dh_auto_test:
 	@:
 
-# Go is already stripped with -ldflags '-s -w'. Avoid requiring a foreign
-# binutils package merely to strip an already-stripped cross-built binary.
+# Go is already stripped with -ldflags '-s -w'.
 override_dh_strip:
 	@:
 
 override_dh_auto_clean:
 	rm -f zfstool
 
-# Pure-Go cross-builds have no shared-library metadata to generate or inspect.
-ifeq ($(PACKAGE_CGO),0)
-override_dh_makeshlibs:
-	@:
-
-override_dh_shlibdeps:
-	@:
-
-override_dh_gencontrol:
-	dh_gencontrol -- -Vshlibs:Depends=
-else
 # Ubuntu 24.04 / Debian trixie rename glib and gtk to *t64. Older releases
 # still ship libglib2.0-0 and libgtk-3-0 (same amd64 SONAME). Drop the hard
 # t64 names from shlibdeps so debian/control can OR them with the old names.
 override_dh_shlibdeps:
 	dh_shlibdeps -- -xlibglib2.0-0t64 -xlibgtk-3-0t64 -xlibgdk-pixbuf-2.0-0t64
-endif

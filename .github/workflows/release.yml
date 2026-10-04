@@ -1,0 +1,58 @@
+name: Release native Debian packages
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-deb:
+    name: Debian ${{ matrix.arch }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: make deb-deps SUDO=sudo
+      - name: Run tests
+        run: go test ./...
+      - name: Build native package
+        run: make deb-${{ matrix.arch }}
+      - name: Verify package architecture and native GUI linkage
+        run: |
+          package=$(find .. -maxdepth 1 -name "zfstool_*_${{ matrix.arch }}.deb" -print -quit)
+          test -n "$package"
+          test "$(dpkg-deb -f "$package" Architecture)" = "${{ matrix.arch }}"
+          mkdir package-root
+          dpkg-deb -x "$package" package-root
+          file package-root/usr/bin/zfstool
+          ldd package-root/usr/bin/zfstool | grep -E 'libgtk-3|libwebkit2gtk-4.1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zfstool-deb-${{ matrix.arch }}
+          path: ../zfstool_*_${{ matrix.arch }}.deb
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: build-deb
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zfstool-deb-*
+          merge-multiple: true
+          path: packages
+      - name: Create release with both native packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" packages/*.deb --generate-notes --title "zfstool ${GITHUB_REF_NAME#v}"

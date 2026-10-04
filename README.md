@@ -174,14 +174,18 @@ Raspberry Pi models capable of ARM64 still need a 64-bit userspace; check that
 
 | Target | Notes |
 |--------|--------|
-| `make deb` | Build both AMD64 and ARM64 Debian packages in the **parent** directory. Run `make deb-deps` first. |
-| `make deb-amd64` | Build only the AMD64 Debian package. A cross-built package uses the browser UI. |
-| `make deb-arm64` | Build only the ARM64 Debian package. A cross-built package uses the browser UI. |
+| `make deb` | Build a native Debian package for the current architecture in the **parent** directory. Run `make deb-deps` first. |
+| `make deb-amd64` | Build the full native GTK/WebKit AMD64 package on an AMD64 host. |
+| `make deb-arm64` | Build the full native GTK/WebKit ARM64 package on an ARM64 host. |
 | `make rpm` | Binary RPM under `build/rpm/RPMS/<arch>/`. Run `make rpm-deps` first. |
 | `make rpm-arm64` | AArch64 RPM, built natively on an ARM64 RPM-based host. |
 | `make srpm` | Source RPM under `build/rpm/SRPMS/`. |
 
 More detail: [`deploy/PACKAGING.txt`](deploy/PACKAGING.txt).
+
+Tagged releases automatically build both Debian packages on native AMD64 and
+ARM64 GitHub runners. Consequently both release packages include the same
+embedded GTK/WebKit desktop window; neither is a browser-only cross-build.
 
 ---
 

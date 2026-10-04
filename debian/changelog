@@ -1,3 +1,11 @@
+zfstool (0.2.20-1) unstable; urgency=medium
+
+  * Build release packages on native AMD64 and ARM64 runners.
+  * Enable the embedded GTK/WebKit desktop window in the ARM64 package.
+  * Reject browser-only cross-builds for architecture-specific packages.
+
+ -- nixomose <nixomose@gmail.com>  Sun, 04 Oct 2026 07:04:44 -0400
+
 zfstool (0.2.19-1) unstable; urgency=medium
 
   * Build AMD64 and ARM64 Debian packages together with make deb.
