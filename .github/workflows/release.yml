@@ -57,4 +57,4 @@ jobs:
       - name: Create release with both native packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" packages/*.deb --generate-notes --title "zfstool ${GITHUB_REF_NAME#v}"
+        run: gh release create "${GITHUB_REF_NAME}" packages/*.deb --repo "${GITHUB_REPOSITORY}" --generate-notes --title "zfstool ${GITHUB_REF_NAME#v}"
