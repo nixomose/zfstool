@@ -1,3 +1,10 @@
+zfstool (0.2.22-1) unstable; urgency=medium
+
+  * Avoid a native WebView crash in SSH sessions without a graphical display.
+  * Fall back gracefully to browser mode when no native window can be created.
+
+ -- nixomose <nixomose@gmail.com>  Tue, 06 Oct 2026 08:46:49 -0400
+
 zfstool (0.2.21-1) unstable; urgency=medium
 
   * Publish verified native packages from both release runners.
