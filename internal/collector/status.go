@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"github.com/nixomose/zfstool/internal/api"
@@ -136,6 +137,9 @@ func parseStatusConfigLine(line string) *api.StatusLine {
 		return nil
 	}
 	sl := &api.StatusLine{Indent: indent, Name: fields[0]}
+	if isDiskLeafName(sl.Name) {
+		sl.Device = canonicalDevice(normalizeDiskPath(sl.Name))
+	}
 	if len(fields) > 1 {
 		sl.State = fields[1]
 	}
@@ -176,5 +180,8 @@ func parseScanLine(s string) *api.ScanInfo {
 		si.LastRun = s
 	}
 	si.Progress = s
+	if match := regexp.MustCompile(`([0-9]+(?:\.[0-9]+)?)%`).FindStringSubmatch(s); len(match) == 2 {
+		si.ProgressPct = match[1]
+	}
 	return si
 }

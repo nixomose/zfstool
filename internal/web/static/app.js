@@ -3409,7 +3409,16 @@
             esc(scanLabel) +
             ' in progress</strong>' +
             (details.length ? ' · ' + esc(details.join(' · ')) : '') +
-            '</p>';
+            '</p>' +
+            (st.scan.progressPct
+              ? '<div class="usage-bar-wrap" role="img" aria-label="' +
+                esc(scanLabel + ' ' + st.scan.progressPct + '% complete') +
+                '"><div class="usage-bar"><div class="seg kind-data" style="width:' +
+                Math.max(0, Math.min(100, Number(st.scan.progressPct))) +
+                '%"></div></div><div class="usage-bar-label">' +
+                esc(st.scan.progressPct) +
+                '% complete</div></div>'
+              : '');
         } else if (st.scan && st.scan.raw) {
           scanLine = '<p class="scan-line"><strong>Scan</strong> · ' + esc(st.scan.raw) + '</p>';
         } else if (st.scanRaw) {
@@ -3425,7 +3434,7 @@
                 esc(diskHref(ln.name)) +
                 '">' +
                 esc(ln.name) +
-                diskSizeLabel(diskByPath[ln.name] || diskForName(disks, ln.name)) +
+                diskSizeLabel(diskByPath[ln.device] || diskByPath[ln.name] || diskForName(disks, ln.name)) +
                 '</a>';
             } else if (ln.name !== poolName) {
               link = '<a href="' + esc(vdevHref(poolName, idx)) + '">' + esc(ln.name) + '</a>';

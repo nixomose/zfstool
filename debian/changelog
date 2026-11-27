@@ -1,3 +1,10 @@
+zfstool (0.2.25-1) unstable; urgency=medium
+
+  * Show resolved drive sizes next to ZFS pool vdev paths.
+  * Add scrub completion percentage and progress bar to pool status.
+
+ -- nixomose <nixomose@gmail.com>  Fri, 27 Nov 2026 00:00:00 -0500
+
 zfstool (0.2.24-1) unstable; urgency=medium
 
   * Avoid an X11/WebKit crash during native JavaScript binding setup.

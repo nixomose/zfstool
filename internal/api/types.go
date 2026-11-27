@@ -48,6 +48,7 @@ type PoolStatus struct {
 type StatusLine struct {
 	Indent int    `json:"indent"`
 	Name   string `json:"name"`
+	Device string `json:"device,omitempty"`
 	State  string `json:"state,omitempty"`
 	Read   string `json:"read,omitempty"`
 	Write  string `json:"write,omitempty"`
@@ -59,6 +60,7 @@ type ScanInfo struct {
 	Type           string `json:"type"` // scrub, resilver, trim, unknown
 	InProgress     bool   `json:"inProgress"`
 	Progress       string `json:"progress,omitempty"`
+	ProgressPct    string `json:"progressPct,omitempty"`
 	BytesProcessed string `json:"bytesProcessed,omitempty"`
 	ETA            string `json:"eta,omitempty"`
 	LastRun        string `json:"lastRun,omitempty"`

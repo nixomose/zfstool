@@ -56,6 +56,9 @@ errors: No known data errors
 	if st.Scan.Progress == "" {
 		t.Fatal("expected scrub progress text")
 	}
+	if st.Scan.ProgressPct != "42.5" {
+		t.Fatalf("progress percent = %q, want 42.5", st.Scan.ProgressPct)
+	}
 }
 
 func TestMapVDevToDevicesFullPaths(t *testing.T) {
