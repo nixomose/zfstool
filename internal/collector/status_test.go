@@ -35,6 +35,29 @@ errors: No known data errors
 	}
 }
 
+func TestParseStatusActiveScrub(t *testing.T) {
+	raw := `  pool: tank
+ state: ONLINE
+  scan: scrub in progress since Sun Jan  1 00:00:00 2020, 42.5% done, 1T scanned
+config:
+
+	NAME        STATE     READ WRITE CKSUM
+	tank        ONLINE       0     0     0
+
+errors: No known data errors
+`
+	st := parseStatus(raw)
+	if st.Scan == nil {
+		t.Fatal("expected scan")
+	}
+	if st.Scan.Type != "scrub" || !st.Scan.InProgress {
+		t.Fatalf("scan = %#v, want active scrub", st.Scan)
+	}
+	if st.Scan.Progress == "" {
+		t.Fatal("expected scrub progress text")
+	}
+}
+
 func TestMapVDevToDevicesFullPaths(t *testing.T) {
 	raw := `config:
 

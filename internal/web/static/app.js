@@ -103,6 +103,10 @@
     return (neg ? '-' : '') + withCommas;
   }
 
+  function diskSizeLabel(disk) {
+    return disk && Number(disk.size) > 0 ? ' · ' + fmtBytes(disk.size) : '';
+  }
+
   /** Byte-valued zfs properties (zfs get -p returns integer bytes). */
   const ZFS_BYTE_PROPS = {
     available: 1,
@@ -2135,6 +2139,7 @@
             esc(d.device + (poolNames ? ' · ' + poolNames : '') + (d.model ? ' · ' + d.model : '')) +
             '">' +
             esc(shortDev(d.device)) +
+            diskSizeLabel(d) +
             mediaTagHtml(d.media) +
             '</a></div>';
           if (open) {
@@ -2159,6 +2164,7 @@
                 ) +
                 '">' +
                 esc(shortDev(p.device || p.name)) +
+                diskSizeLabel(p) +
                 (p.mountpoint ? ' · ' + esc(p.mountpoint) : '') +
                 '</a>';
             });
@@ -2373,10 +2379,17 @@
     );
     if (!box) return;
     try {
-      const [st, datasets] = await Promise.all([
+      const [st, datasets, disks] = await Promise.all([
         j('/v1/pools/' + encSeg(pname) + '/status'),
         j('/v1/datasets?pool=' + encSeg(pname)),
+        getDisks(),
       ]);
+      const diskByPath = {};
+      flattenDisks(disks || []).forEach(function (x) {
+        const d = x.disk;
+        if (d.device) diskByPath[d.device] = d;
+        if (d.name) diskByPath[d.name] = d;
+      });
       const enriched = enrichConfig(st.config || [], pname);
       const diskLines = enriched.filter(function (l) {
         return l.isDisk;
@@ -2406,6 +2419,7 @@
           esc(diskHref(l.name)) +
           '">disk ' +
           esc(shortDev(l.name)) +
+          diskSizeLabel(diskByPath[l.name]) +
           '</a>';
       });
       fs.slice(0, 40).forEach(function (d) {
@@ -3342,7 +3356,7 @@
         graph: tab === 'graph',
         klog: tab === 'klog',
       };
-      const [summary, st, datasets, history, maint, props, iostat, graph, klog, bookmarks] =
+      const [summary, st, datasets, history, maint, props, iostat, graph, klog, bookmarks, disks] =
         await Promise.all([
           getPools().then(function (ps) {
             return ps.find(function (x) {
@@ -3362,7 +3376,15 @@
                 return [];
               })
             : Promise.resolve([]),
+          getDisks(),
         ]);
+
+      const diskByPath = {};
+      flattenDisks(disks || []).forEach(function (x) {
+        const d = x.disk;
+        if (d.device) diskByPath[d.device] = d;
+        if (d.name) diskByPath[d.name] = d;
+      });
 
       const enriched = enrichConfig(st.config || [], poolName);
       const sum = summary || {};
@@ -3371,7 +3393,19 @@
       let body = '';
       if (tab === 'status') {
         let scanLine = '';
-        if (st.scan && st.scan.raw) {
+        if (st.scan && st.scan.inProgress) {
+          const scanLabel = st.scan.type ? st.scan.type.charAt(0).toUpperCase() + st.scan.type.slice(1) : 'Scan';
+          const details = [];
+          if (st.scan.progress) details.push(st.scan.progress);
+          if (st.scan.bytesProcessed) details.push(st.scan.bytesProcessed);
+          if (st.scan.eta) details.push('ETA ' + st.scan.eta);
+          scanLine =
+            '<p class="scan-line"><strong>' +
+            esc(scanLabel) +
+            ' in progress</strong>' +
+            (details.length ? ' · ' + esc(details.join(' · ')) : '') +
+            '</p>';
+        } else if (st.scan && st.scan.raw) {
           scanLine = '<p class="scan-line"><strong>Scan</strong> · ' + esc(st.scan.raw) + '</p>';
         } else if (st.scanRaw) {
           scanLine = '<p class="scan-line"><strong>Scan</strong> · ' + esc(st.scanRaw) + '</p>';
@@ -3381,7 +3415,13 @@
             const pad = Math.min(ln.indent * 0.7, 18);
             let link = esc(ln.name);
             if (ln.isDisk) {
-              link = '<a href="' + esc(diskHref(ln.name)) + '">' + esc(ln.name) + '</a>';
+              link =
+                '<a href="' +
+                esc(diskHref(ln.name)) +
+                '">' +
+                esc(ln.name) +
+                diskSizeLabel(diskByPath[ln.name]) +
+                '</a>';
             } else if (ln.name !== poolName) {
               link = '<a href="' + esc(vdevHref(poolName, idx)) + '">' + esc(ln.name) + '</a>';
             } else {
@@ -3746,7 +3786,16 @@
     const idx = parseInt(idxStr, 10);
     appEl.innerHTML = '<p class="loading">Loading…</p>';
     try {
-      const st = await j('/v1/pools/' + encSeg(poolName) + '/status');
+      const [st, disks] = await Promise.all([
+        j('/v1/pools/' + encSeg(poolName) + '/status'),
+        getDisks(),
+      ]);
+      const diskByPath = {};
+      flattenDisks(disks || []).forEach(function (x) {
+        const d = x.disk;
+        if (d.device) diskByPath[d.device] = d;
+        if (d.name) diskByPath[d.name] = d;
+      });
       const enriched = enrichConfig(st.config || [], poolName);
       const ln = enriched[idx];
       if (!ln) throw new Error('Vdev line not found');
@@ -3760,7 +3809,7 @@
         .map(function (k) {
           const c = k.line;
           const nm = c.isDisk
-            ? '<a href="' + esc(diskHref(c.name)) + '">' + esc(c.name) + '</a>'
+            ? '<a href="' + esc(diskHref(c.name)) + '">' + esc(c.name) + diskSizeLabel(diskByPath[c.name]) + '</a>'
             : '<a href="' + esc(vdevHref(poolName, k.idx)) + '">' + esc(c.name) + '</a>';
           return (
             '<tr><td>' +

@@ -1,3 +1,10 @@
+zfstool (0.2.23-1) unstable; urgency=medium
+
+  * Show human-readable disk sizes throughout disk and pool views.
+  * Show active scrub/resilver progress and ETA in pool status summaries.
+
+ -- nixomose <nixomose@gmail.com>  Fri, 27 Nov 2026 00:00:00 -0500
+
 zfstool (0.2.22-1) unstable; urgency=medium
 
   * Avoid a native WebView crash in SSH sessions without a graphical display.
