@@ -911,6 +911,11 @@
     return hit;
   }
 
+  function diskForName(disks, path) {
+    const hit = findDiskNode(disks, path);
+    return hit && hit.disk;
+  }
+
   function partKind(d) {
     const fs = String((d && d.fstype) || '').toLowerCase();
     if (fs.indexOf('zfs') >= 0) return 'zfs';
@@ -2419,7 +2424,7 @@
           esc(diskHref(l.name)) +
           '">disk ' +
           esc(shortDev(l.name)) +
-          diskSizeLabel(diskByPath[l.name]) +
+          diskSizeLabel(diskByPath[l.name] || diskForName(disks, l.name)) +
           '</a>';
       });
       fs.slice(0, 40).forEach(function (d) {
@@ -3420,7 +3425,7 @@
                 esc(diskHref(ln.name)) +
                 '">' +
                 esc(ln.name) +
-                diskSizeLabel(diskByPath[ln.name]) +
+                diskSizeLabel(diskByPath[ln.name] || diskForName(disks, ln.name)) +
                 '</a>';
             } else if (ln.name !== poolName) {
               link = '<a href="' + esc(vdevHref(poolName, idx)) + '">' + esc(ln.name) + '</a>';
@@ -3809,7 +3814,7 @@
         .map(function (k) {
           const c = k.line;
           const nm = c.isDisk
-            ? '<a href="' + esc(diskHref(c.name)) + '">' + esc(c.name) + diskSizeLabel(diskByPath[c.name]) + '</a>'
+            ? '<a href="' + esc(diskHref(c.name)) + '">' + esc(c.name) + diskSizeLabel(diskByPath[c.name] || diskForName(disks, c.name)) + '</a>'
             : '<a href="' + esc(vdevHref(poolName, k.idx)) + '">' + esc(c.name) + '</a>';
           return (
             '<tr><td>' +

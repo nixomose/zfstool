@@ -37,9 +37,10 @@ func Run(args []string) {
 	defer sess.Stop()
 	defer w.Destroy()
 
-	if err := w.Bind("zfstoolExit", func() { w.Terminate() }); err != nil {
-		log.Printf("webview: bind zfstoolExit: %v", err)
-	}
+	// Do not install a JavaScript binding here. On some X11/WebKit stacks,
+	// registering a binding issues an unsupported X request and causes GDK to
+	// abort the process asynchronously. The native window can still be closed
+	// normally; browser builds simply omit the native-only close shortcuts.
 
 	title := "zfstool"
 	if sess.Embedded() {
